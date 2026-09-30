@@ -1,6 +1,6 @@
 # SalesManager CRM — Web Frontend
 
-React single-page app for SalesManager CRM. Repository: `SalesmanagerHLD/SM_Updated_React`. Talks to the Spring Boot API in `SalesmanagerHLD/SM_Updated_java`; the Flutter field-rep app lives in `SalesmanagerHLD/SM_Updated_Mobile`.
+React single-page app for SalesManager CRM. Repository: [SalesmanagerHLD/SM_Updated_React](https://github.com/SalesmanagerHLD/SM_Updated_React). Talks to the Spring Boot API in [SM_Updated_java](https://github.com/SalesmanagerHLD/SM_Updated_java); the Flutter field-rep app lives in [SM_Updated_Mobile](https://github.com/SalesmanagerHLD/SM_Updated_Mobile).
 
 ## Stack
 
@@ -32,7 +32,7 @@ npm run dev            # http://localhost:5173, API at VITE_API_BASE_URL
 
 ## Deployment
 
-The `dist/` output is served as static files by nginx on the AWS EC2 instance. See `docs/CRM_IMPLEMENTATION.md` in the project docs (Section 18) for the full deployment architecture.
+The `dist/` output is served as static files by nginx on the AWS EC2 instance. See Section 18 of [CRM_IMPLEMENTATION.md](https://github.com/SalesmanagerHLD/SM_Updated_java/blob/main/docs/CRM_IMPLEMENTATION.md) for the full deployment architecture.
 
 ## Branching
 
@@ -40,4 +40,13 @@ The `dist/` output is served as static files by nginx on the AWS EC2 instance. S
 
 ## Documentation
 
-Functional and architectural documentation lives in the project `docs/` folder: `CRM_IMPLEMENTATION.md` (what is built), `EMPLOYEE_ENTITLEMENT_PLAN.md` (Leave/entitlement design) and `SalesManager_CRM_Modules_and_Workflows.md` (modules and workflows).
+Project-wide documentation lives in the backend repo's docs folder:
+
+- [CRM_IMPLEMENTATION.md](https://github.com/SalesmanagerHLD/SM_Updated_java/blob/main/docs/CRM_IMPLEMENTATION.md) — what is built, architecture, deployment
+- [EMPLOYEE_ENTITLEMENT_PLAN.md](https://github.com/SalesmanagerHLD/SM_Updated_java/blob/main/docs/EMPLOYEE_ENTITLEMENT_PLAN.md) — Leave and entitlement design
+- [SalesManager_CRM_Modules_and_Workflows.md](https://github.com/SalesmanagerHLD/SM_Updated_java/blob/main/docs/SalesManager_CRM_Modules_and_Workflows.md) — modules and workflows
+
+## Related repositories
+
+- [SM_Updated_java](https://github.com/SalesmanagerHLD/SM_Updated_java) — backend API
+- [SM_Updated_Mobile](https://github.com/SalesmanagerHLD/SM_Updated_Mobile) — Flutter mobile app

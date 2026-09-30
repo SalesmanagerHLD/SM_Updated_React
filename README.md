@@ -1,32 +1,43 @@
-# React + TypeScript + Vite
+# SalesManager CRM — Web Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React single-page app for SalesManager CRM. Repository: `SalesmanagerHLD/SM_Updated_React`. Talks to the Spring Boot API in `SalesmanagerHLD/SM_Updated_java`; the Flutter field-rep app lives in `SalesmanagerHLD/SM_Updated_Mobile`.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 18 + TypeScript + Vite
+- MUI (Material UI) v9
+- TanStack React Query (server state), React Hook Form + Zod (forms), react-router-dom v6, Recharts (charts)
+- Oxlint for linting
 
-## React Compiler
+## Getting started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+cp .env.example .env   # then adjust values
+npm run dev            # http://localhost:5173, API at VITE_API_BASE_URL
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Vite dev server with HMR |
+| `npm run build` | Type-check (`tsc -b`) and production build to `dist/` |
+| `npm run lint` | Oxlint |
+| `npm run preview` | Serve the production build locally |
+
+## Configuration
+
+- `.env` — local development. `VITE_API_BASE_URL` defaults to `http://localhost:8080/api/v1`.
+- `.env.production` — used by `vite build`. `VITE_API_BASE_URL=/api/v1` is a relative path, so the built app calls the API on whatever host serves it (nginx reverse-proxies `/api/` to the backend). No rebuild is needed if the public IP or domain changes.
+- Firebase web config (`VITE_FIREBASE_*`) is optional and only needed for push notifications.
+
+## Deployment
+
+The `dist/` output is served as static files by nginx on the AWS EC2 instance. See `docs/CRM_IMPLEMENTATION.md` in the project docs (Section 18) for the full deployment architecture.
+
+## Branching
+
+`main` reflects what is deployed. Ongoing work goes on `develop` or a feature branch, then merges to `main`.
+
+## Documentation
+
+Functional and architectural documentation lives in the project `docs/` folder: `CRM_IMPLEMENTATION.md` (what is built), `EMPLOYEE_ENTITLEMENT_PLAN.md` (Leave/entitlement design) and `SalesManager_CRM_Modules_and_Workflows.md` (modules and workflows).

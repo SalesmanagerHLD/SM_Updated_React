@@ -60,6 +60,8 @@ export function InvoiceDetailPage() {
     );
   }
 
+  const isIgst = (invoice.igstTotal ?? 0) > 0;
+
   const toggleStatus = () => {
     const nextStatus: InvoiceStatus = invoice.status === "PAID" ? "UNPAID" : "PAID";
     updateStatusMutation.mutate({ id: invoice.id, status: nextStatus });
@@ -192,8 +194,14 @@ export function InvoiceDetailPage() {
               <TableCell align="right">Qty</TableCell>
               <TableCell align="right">Unit Price</TableCell>
               <TableCell align="right">Discount %</TableCell>
-              <TableCell align="right">CGST</TableCell>
-              <TableCell align="right">SGST</TableCell>
+              {isIgst ? (
+                <TableCell align="right">IGST</TableCell>
+              ) : (
+                <>
+                  <TableCell align="right">CGST</TableCell>
+                  <TableCell align="right">SGST</TableCell>
+                </>
+              )}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -204,8 +212,14 @@ export function InvoiceDetailPage() {
                 <TableCell align="right">{line.quantity}</TableCell>
                 <TableCell align="right">{line.unitPrice}</TableCell>
                 <TableCell align="right">{line.discountPercent}</TableCell>
-                <TableCell align="right">{line.lineCgstAmount}</TableCell>
-                <TableCell align="right">{line.lineSgstAmount}</TableCell>
+                {isIgst ? (
+                  <TableCell align="right">{line.lineIgstAmount}</TableCell>
+                ) : (
+                  <>
+                    <TableCell align="right">{line.lineCgstAmount}</TableCell>
+                    <TableCell align="right">{line.lineSgstAmount}</TableCell>
+                  </>
+                )}
               </TableRow>
             ))}
           </TableBody>
@@ -213,7 +227,22 @@ export function InvoiceDetailPage() {
         <Divider sx={{ my: 2 }} />
         <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
           <Typography variant="body2">Subtotal: {invoice.subtotal}</Typography>
-          <Typography variant="body2">Tax: {invoice.taxTotal}</Typography>
+          {invoice.taxableAmount != null && (
+            <Typography variant="body2">Taxable Amount: {invoice.taxableAmount}</Typography>
+          )}
+          {isIgst ? (
+            <Typography variant="body2">IGST: {invoice.igstTotal}</Typography>
+          ) : invoice.cgstTotal != null ? (
+            <>
+              <Typography variant="body2">CGST: {invoice.cgstTotal}</Typography>
+              <Typography variant="body2">SGST: {invoice.sgstTotal}</Typography>
+            </>
+          ) : (
+            <Typography variant="body2">Tax: {invoice.taxTotal}</Typography>
+          )}
+          {invoice.roundOff != null && invoice.roundOff !== 0 && (
+            <Typography variant="body2">Round off: {invoice.roundOff}</Typography>
+          )}
           <Typography variant="subtitle1">Grand Total: {invoice.grandTotal}</Typography>
         </Stack>
       </Paper>

@@ -25,6 +25,8 @@ import { useProducts } from "../../api/productsApi";
 import type { Product } from "../../api/productsApi";
 import { useEmployees } from "../../api/employeesApi";
 import { useMasterData } from "../../api/masterDataApi";
+import { useBillingProfile } from "../../api/billingProfileApi";
+import { isInterState, splitTax } from "../../utils/gst";
 import { CreatableMasterAutocomplete } from "../../components/CreatableMasterAutocomplete";
 import type { Customer } from "../../api/customersApi";
 import { useCustomer } from "../../api/customersApi";
@@ -63,7 +65,7 @@ function emptyRow(): LineItemRow {
   };
 }
 
-function computeLineTotals(row: LineItemRow) {
+function computeLineTotals(row: LineItemRow, interState: boolean) {
   const quantity = Number(row.quantity) || 0;
   const unitPrice = Number(row.unitPrice) || 0;
   const discountPercent = Number(row.discountPercent) || 0;
@@ -71,9 +73,8 @@ function computeLineTotals(row: LineItemRow) {
   const lineSubtotal = quantity * unitPrice;
   const lineDiscount = lineSubtotal * (discountPercent / 100);
   const lineTaxable = lineSubtotal - lineDiscount;
-  const cgst = lineTaxable * (taxRatePercent / 2 / 100);
-  const sgst = cgst;
-  return { lineSubtotal, lineDiscount, lineTaxable, cgst, sgst, lineTotal: lineTaxable + cgst + sgst };
+  const { cgst, sgst, igst } = splitTax(lineTaxable, taxRatePercent, interState);
+  return { lineSubtotal, lineDiscount, lineTaxable, cgst, sgst, igst, lineTotal: lineTaxable + cgst + sgst + igst };
 }
 
 /**
@@ -119,6 +120,8 @@ export function QuotationFormPage() {
   const [cityOther, setCityOther] = useState<string | null>(null);
   const [stateId, setStateId] = useState<string | null>(null);
   const [stateOther, setStateOther] = useState<string | null>(null);
+  const { data: billingProfile } = useBillingProfile(true);
+  const interState = isInterState(billingProfile?.billingStateId, stateId);
   const [interestLevelId, setInterestLevelId] = useState<string | null>(null);
   const [interestLevelOther, setInterestLevelOther] = useState<string | null>(null);
   const [businessTypeId, setBusinessTypeId] = useState<string | null>(null);
@@ -254,12 +257,14 @@ export function QuotationFormPage() {
     let discountTotal = 0;
     let cgstTotal = 0;
     let sgstTotal = 0;
+    let igstTotal = 0;
     for (const row of lineItems) {
-      const t = computeLineTotals(row);
+      const t = computeLineTotals(row, interState);
       subtotal += t.lineSubtotal;
       discountTotal += t.lineDiscount;
       cgstTotal += t.cgst;
       sgstTotal += t.sgst;
+      igstTotal += t.igst;
     }
     const taxableAmount = subtotal - discountTotal;
     return {
@@ -268,9 +273,10 @@ export function QuotationFormPage() {
       taxableAmount,
       cgstTotal,
       sgstTotal,
-      grandTotal: taxableAmount + cgstTotal + sgstTotal,
+      igstTotal,
+      grandTotal: taxableAmount + cgstTotal + sgstTotal + igstTotal,
     };
-  }, [lineItems]);
+  }, [lineItems, interState]);
 
   const buildPayload = (status: "DRAFT" | "SENT"): QuotationPayload | null => {
     if (!selectedCustomer) {
@@ -552,7 +558,7 @@ export function QuotationFormPage() {
 
         <Stack spacing={2}>
           {lineItems.map((row, index) => {
-            const t = computeLineTotals(row);
+            const t = computeLineTotals(row, interState);
             return (
               <Box key={row.key}>
                 {index > 0 && <Divider sx={{ mb: 2 }} />}
@@ -654,8 +660,14 @@ export function QuotationFormPage() {
           <Typography variant="body2">Sub Total: {totals.subtotal.toFixed(2)}</Typography>
           <Typography variant="body2">Discount: {totals.discountTotal.toFixed(2)}</Typography>
           <Typography variant="body2">Taxable Amount: {totals.taxableAmount.toFixed(2)}</Typography>
-          <Typography variant="body2">CGST: {totals.cgstTotal.toFixed(2)}</Typography>
-          <Typography variant="body2">SGST: {totals.sgstTotal.toFixed(2)}</Typography>
+          {interState ? (
+            <Typography variant="body2">IGST: {totals.igstTotal.toFixed(2)}</Typography>
+          ) : (
+            <>
+              <Typography variant="body2">CGST: {totals.cgstTotal.toFixed(2)}</Typography>
+              <Typography variant="body2">SGST: {totals.sgstTotal.toFixed(2)}</Typography>
+            </>
+          )}
           <Typography variant="subtitle1" color="success.main">
             Grand Total: {totals.grandTotal.toFixed(2)}
           </Typography>

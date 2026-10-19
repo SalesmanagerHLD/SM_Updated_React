@@ -1,0 +1,11 @@
+Full Name,Email,Phone,Password,Role,Designation,City,State,Manager Email,Assigned Products
+Aarav Sharma,aarav.sharma@example.com,9810000001,Welcome@123,EMPLOYEE,Manager,Mumbai,Maharashtra,,Solar Inverter 3KVA; Solar Panel 330W
+Priya Verma,priya.verma@example.com,9810000002,Welcome@123,EMPLOYEE,Engineer,Pune,Maharashtra,aarav.sharma@example.com,Solar Inverter 3KVA
+Rohan Gupta,rohan.gupta@example.com,9810000003,Welcome@123,EMPLOYEE,Engineer,Delhi,Delhi,aarav.sharma@example.com,Solar Panel 330W
+Sneha Iyer,sneha.iyer@example.com,9810000004,Welcome@123,EMPLOYEE,Engineer,Bangalore,Karnataka,aarav.sharma@example.com,Solar Inverter 3KVA; Battery Backup
+Karan Mehta,karan.mehta@example.com,9810000005,Welcome@123,EMPLOYEE,General Manager,Ahmedabad,Gujarat,,Battery Backup
+Ananya Reddy,ananya.reddy@example.com,9810000006,Welcome@123,EMPLOYEE,Engineer,Hyderabad,Telangana,karan.mehta@example.com,Solar Panel 330W; Battery Backup
+Vikram Singh,vikram.singh@example.com,9810000007,Welcome@123,EMPLOYEE,Engineer,Jaipur,Rajasthan,karan.mehta@example.com,Solar Inverter 3KVA
+Neha Kapoor,neha.kapoor@example.com,9810000008,Welcome@123,EMPLOYEE,Engineer,Chandigarh,Punjab,karan.mehta@example.com,
+Rahul Nair,rahul.nair@example.com,9810000009,Welcome@123,EMPLOYEE,Engineer,Kochi,Kerala,aarav.sharma@example.com,Solar Inverter 3KVA; Solar Panel 330W
+Divya Joshi,divya.joshi@example.com,9810000010,Welcome@123,EMPLOYEE,Purchase Manager,Mumbai,Maharashtra,,

@@ -5,6 +5,8 @@ export interface BillingProfile {
   businessName: string;
   billingAddress: string | null;
   billingGstin: string | null;
+  /** Supplier's home state (STATE master-data id) - drives CGST+SGST vs IGST. */
+  billingStateId: string | null;
   billingPhone: string | null;
   hasLogo: boolean;
   invoiceHeaderText: string | null;
@@ -19,6 +21,7 @@ export interface BillingProfile {
 export interface UpdateBillingProfilePayload {
   billingAddress?: string;
   billingGstin?: string;
+  billingStateId?: string;
   billingPhone?: string;
   invoiceHeaderText?: string;
   invoiceFooterText?: string;

@@ -26,6 +26,7 @@ import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import BlockIcon from "@mui/icons-material/Block";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { Employee } from "../../api/employeesApi";
 import { getEmployees, useDeactivateEmployee, useEmployees } from "../../api/employeesApi";
 import { useMasterData } from "../../api/masterDataApi";
@@ -34,6 +35,7 @@ import { exportToCsv } from "../../utils/exportToCsv";
 import { TableToolbar } from "../../components/TableToolbar";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { EmployeeFormDialog } from "./EmployeeFormDialog";
+import { EmployeeImportDialog } from "./EmployeeImportDialog";
 
 const PAGE_SIZE = 20;
 
@@ -64,6 +66,7 @@ export function EmployeeListPage() {
   }, [designations]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [pendingDeactivate, setPendingDeactivate] = useState<Employee | null>(
     null,
@@ -139,13 +142,22 @@ export function EmployeeListPage() {
         sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
       >
         <Typography variant="h5">Employees</Typography>
-        <Button
-          startIcon={<AddIcon />}
-          variant="contained"
-          onClick={openCreateDialog}
-        >
-          Add Employee
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            startIcon={<UploadFileIcon />}
+            variant="outlined"
+            onClick={() => setImportOpen(true)}
+          >
+            Import
+          </Button>
+          <Button
+            startIcon={<AddIcon />}
+            variant="contained"
+            onClick={openCreateDialog}
+          >
+            Add Employee
+          </Button>
+        </Stack>
       </Stack>
 
       {rowError && (
@@ -350,6 +362,8 @@ export function EmployeeListPage() {
         onClose={() => setDialogOpen(false)}
         employee={editingEmployee}
       />
+
+      <EmployeeImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
 
       {pendingDeactivate && (
         <ConfirmDialog

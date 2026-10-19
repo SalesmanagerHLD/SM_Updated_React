@@ -34,6 +34,7 @@ import { ProductListPage } from "../features/inventory/ProductListPage";
 import { InvoiceDashboardPage } from "../features/invoicing/InvoiceDashboardPage";
 import { InvoiceFormPage } from "../features/invoicing/InvoiceFormPage";
 import { InvoiceDetailPage } from "../features/invoicing/InvoiceDetailPage";
+import { InvoiceDesignPage } from "../features/invoicing/InvoiceDesignPage";
 import { CustomerListPage } from "../features/customers/CustomerListPage";
 import { QuotationListPage } from "../features/quotations/QuotationListPage";
 import { QuotationFormPage } from "../features/quotations/QuotationFormPage";
@@ -107,6 +108,12 @@ export function AppRoutes() {
             <Route path="invoices" element={<InvoiceDashboardPage />} />
             <Route path="invoices/new" element={<InvoiceFormPage />} />
             <Route path="invoices/:id" element={<InvoiceDetailPage />} />
+          </Route>
+
+          <Route element={<RequireEntitlementRoute feature="INVOICING" />}>
+            <Route element={<AdminRoute />}>
+              <Route path="settings/invoice-design" element={<InvoiceDesignPage />} />
+            </Route>
           </Route>
         </Route>
       </Route>

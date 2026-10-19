@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  MenuItem,
   Paper,
   Stack,
   ToggleButton,
@@ -32,6 +33,8 @@ import {
   useUpdateBillingProfile,
   useUploadLogo,
 } from "../../api/billingProfileApi";
+import { Link as RouterLink } from "react-router-dom";
+import { useMasterData } from "../../api/masterDataApi";
 import { CalendarConnectionSection } from "./CalendarConnectionSection";
 
 type Mode = "LIGHT" | "DARK";
@@ -264,9 +267,11 @@ function BillingProfileSection() {
   const isAdmin = role === "ADMIN";
   const profileQuery = useBillingProfile(true);
   const updateMutation = useUpdateBillingProfile();
+  const { data: states } = useMasterData("STATE");
 
   const [billingAddress, setBillingAddress] = useState("");
   const [billingGstin, setBillingGstin] = useState("");
+  const [billingStateId, setBillingStateId] = useState("");
   const [billingPhone, setBillingPhone] = useState("");
   const [invoiceHeaderText, setInvoiceHeaderText] = useState("");
   const [invoiceFooterText, setInvoiceFooterText] = useState("");
@@ -284,6 +289,7 @@ function BillingProfileSection() {
       loadedRef.current = true;
       setBillingAddress(profileQuery.data.billingAddress ?? "");
       setBillingGstin(profileQuery.data.billingGstin ?? "");
+      setBillingStateId(profileQuery.data.billingStateId ?? "");
       setBillingPhone(profileQuery.data.billingPhone ?? "");
       setInvoiceHeaderText(profileQuery.data.invoiceHeaderText ?? "");
       setInvoiceFooterText(profileQuery.data.invoiceFooterText ?? "");
@@ -302,6 +308,7 @@ function BillingProfileSection() {
       await updateMutation.mutateAsync({
         billingAddress: billingAddress || undefined,
         billingGstin: billingGstin || undefined,
+        billingStateId: billingStateId || undefined,
         billingPhone: billingPhone || undefined,
         invoiceHeaderText: invoiceHeaderText || undefined,
         invoiceFooterText: invoiceFooterText || undefined,
@@ -334,6 +341,13 @@ function BillingProfileSection() {
         ) : (
           <>
             <LogoUploadRow isAdmin={isAdmin} hasLogo={profileQuery.data?.hasLogo ?? false} />
+            {isAdmin && (
+              <Box>
+                <Button component={RouterLink} to="/app/settings/invoice-design" variant="outlined" size="small">
+                  Customize invoice design
+                </Button>
+              </Box>
+            )}
             <TextField
               label="Business address"
               fullWidth
@@ -359,6 +373,24 @@ function BillingProfileSection() {
                 onChange={(e) => setBillingPhone(e.target.value)}
               />
             </Stack>
+            <TextField
+              select
+              label="State"
+              fullWidth
+              disabled={!isAdmin}
+              value={billingStateId}
+              onChange={(e) => setBillingStateId(e.target.value)}
+              helperText="Your business's home state. Sales to a different state are charged IGST instead of CGST + SGST."
+            >
+              <MenuItem value="">
+                <em>Not set</em>
+              </MenuItem>
+              {(states ?? []).map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.label}
+                </MenuItem>
+              ))}
+            </TextField>
             <TextField
               label="Header text (optional)"
               fullWidth

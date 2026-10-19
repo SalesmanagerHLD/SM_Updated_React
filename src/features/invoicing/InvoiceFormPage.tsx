@@ -27,6 +27,9 @@ import type { CreateInvoicePayload, InvoiceLineItemPayload } from "../../api/inv
 import { useCreateInvoice } from "../../api/invoicesApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { BarcodeScanField } from "../../components/BarcodeScanField";
+import { useBillingProfile } from "../../api/billingProfileApi";
+import { useMasterData } from "../../api/masterDataApi";
+import { isInterState, roundToRupee, splitTax } from "../../utils/gst";
 
 type LineItemMode = "catalog" | "adhoc";
 
@@ -56,15 +59,24 @@ function emptyRow(): LineItemRow {
   };
 }
 
-function computeLineTotals(row: LineItemRow) {
+function computeLineTotals(row: LineItemRow, interState: boolean) {
   const quantity = Number(row.quantity) || 0;
   const unitPrice = Number(row.unitPrice) || 0;
   const discountPercent = Number(row.discountPercent) || 0;
   const taxRatePercent = Number(row.taxRatePercent) || 0;
   const lineSubtotal = quantity * unitPrice;
   const lineDiscount = lineSubtotal * (discountPercent / 100);
-  const lineTax = (lineSubtotal - lineDiscount) * (taxRatePercent / 100);
-  return { lineSubtotal, lineDiscount, lineTax, lineTotal: lineSubtotal - lineDiscount + lineTax };
+  const lineTaxable = lineSubtotal - lineDiscount;
+  const { cgst, sgst, igst } = splitTax(lineTaxable, taxRatePercent, interState);
+  return {
+    lineSubtotal,
+    lineDiscount,
+    lineTaxable,
+    cgst,
+    sgst,
+    igst,
+    lineTotal: lineTaxable + cgst + sgst + igst,
+  };
 }
 
 /**
@@ -96,7 +108,7 @@ export function InvoiceFormPage() {
   const [shipToGstin, setShipToGstin] = useState("");
   const [invoiceDate, setInvoiceDate] = useState<Dayjs | null>(dayjs());
   const [dueDate, setDueDate] = useState<Dayjs | null>(dayjs().add(15, "day"));
-  const [placeOfSupply, setPlaceOfSupply] = useState("");
+  const [placeOfSupplyStateId, setPlaceOfSupplyStateId] = useState<string | null>(null);
   const [reverseCharge, setReverseCharge] = useState(false);
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<LineItemRow[]>([emptyRow()]);
@@ -104,9 +116,18 @@ export function InvoiceFormPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
+  const { data: states } = useMasterData("STATE");
+  const { data: billingProfile } = useBillingProfile(true);
+  const interState = isInterState(billingProfile?.billingStateId, placeOfSupplyStateId);
+  const placeOfSupplyState = useMemo(
+    () => (states ?? []).find((s) => s.id === placeOfSupplyStateId) ?? null,
+    [states, placeOfSupplyStateId],
+  );
+
   const handleLeadChange = (lead: Lead | null) => {
     setSelectedLead(lead);
     if (lead) {
+      if (lead.stateId) setPlaceOfSupplyStateId(lead.stateId);
       setCustomerName(lead.companyName);
       setCustomerContactPerson(lead.contactPerson ?? "");
       setCustomerPhone(lead.contactNo ?? "");
@@ -193,15 +214,30 @@ export function InvoiceFormPage() {
   const totals = useMemo(() => {
     let subtotal = 0;
     let discountTotal = 0;
-    let taxTotal = 0;
+    let cgstTotal = 0;
+    let sgstTotal = 0;
+    let igstTotal = 0;
     for (const row of lineItems) {
-      const { lineSubtotal, lineDiscount, lineTax } = computeLineTotals(row);
-      subtotal += lineSubtotal;
-      discountTotal += lineDiscount;
-      taxTotal += lineTax;
+      const t = computeLineTotals(row, interState);
+      subtotal += t.lineSubtotal;
+      discountTotal += t.lineDiscount;
+      cgstTotal += t.cgst;
+      sgstTotal += t.sgst;
+      igstTotal += t.igst;
     }
-    return { subtotal, discountTotal, taxTotal, grandTotal: subtotal - discountTotal + taxTotal };
-  }, [lineItems]);
+    const taxableAmount = subtotal - discountTotal;
+    const { rounded, roundOff } = roundToRupee(taxableAmount + cgstTotal + sgstTotal + igstTotal);
+    return {
+      subtotal,
+      discountTotal,
+      taxableAmount,
+      cgstTotal,
+      sgstTotal,
+      igstTotal,
+      roundOff,
+      grandTotal: rounded,
+    };
+  }, [lineItems, interState]);
 
   const handleSubmit = async () => {
     setFormError(null);
@@ -257,7 +293,8 @@ export function InvoiceFormPage() {
       shipToGstin: shipToSameAsBilling ? undefined : shipToGstin.trim() || undefined,
       invoiceDate: invoiceDate.format("YYYY-MM-DD"),
       dueDate: dueDate ? dueDate.format("YYYY-MM-DD") : undefined,
-      placeOfSupply: placeOfSupply.trim() || undefined,
+      placeOfSupply: placeOfSupplyState?.label,
+      placeOfSupplyStateId: placeOfSupplyStateId ?? undefined,
       reverseCharge,
       lineItems: payloadLineItems,
       notes: notes.trim() || undefined,
@@ -359,11 +396,25 @@ export function InvoiceFormPage() {
               onChange={setDueDate}
               slotProps={{ textField: { fullWidth: true } }}
             />
-            <TextField
-              label="Place of supply"
+            <Autocomplete
               fullWidth
-              value={placeOfSupply}
-              onChange={(e) => setPlaceOfSupply(e.target.value)}
+              options={states ?? []}
+              getOptionLabel={(s) => s.label}
+              value={placeOfSupplyState}
+              onChange={(_, s) => setPlaceOfSupplyStateId(s?.id ?? null)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Place of supply (state)"
+                  helperText={
+                    !billingProfile?.billingStateId
+                      ? "Set your business state in Settings to enable IGST."
+                      : interState
+                        ? "Inter-state sale - IGST will be charged."
+                        : "Same state - CGST + SGST will be charged."
+                  }
+                />
+              )}
             />
           </Stack>
           <FormControlLabel
@@ -425,7 +476,7 @@ export function InvoiceFormPage() {
 
         <Stack spacing={2}>
           {lineItems.map((row, index) => {
-            const { lineTotal } = computeLineTotals(row);
+            const { lineTotal } = computeLineTotals(row, interState);
             return (
               <Box key={row.key}>
                 {index > 0 && <Divider sx={{ mb: 2 }} />}
@@ -523,7 +574,16 @@ export function InvoiceFormPage() {
         <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
           <Typography variant="body2">Subtotal: {totals.subtotal.toFixed(2)}</Typography>
           <Typography variant="body2">Discount: {totals.discountTotal.toFixed(2)}</Typography>
-          <Typography variant="body2">Tax: {totals.taxTotal.toFixed(2)}</Typography>
+          <Typography variant="body2">Taxable Amount: {totals.taxableAmount.toFixed(2)}</Typography>
+          {interState ? (
+            <Typography variant="body2">IGST: {totals.igstTotal.toFixed(2)}</Typography>
+          ) : (
+            <>
+              <Typography variant="body2">CGST: {totals.cgstTotal.toFixed(2)}</Typography>
+              <Typography variant="body2">SGST: {totals.sgstTotal.toFixed(2)}</Typography>
+            </>
+          )}
+          <Typography variant="body2">Round off: {totals.roundOff.toFixed(2)}</Typography>
           <Typography variant="subtitle1">Grand Total: {totals.grandTotal.toFixed(2)}</Typography>
         </Stack>
       </Paper>

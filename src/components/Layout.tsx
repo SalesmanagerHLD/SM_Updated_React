@@ -72,10 +72,10 @@ function NavSectionHeader({ label }: { label: string }) {
     <ListSubheader
       disableSticky
       sx={{
-        lineHeight: "32px",
-        fontSize: "0.7rem",
-        fontWeight: 700,
-        letterSpacing: "0.05em",
+        lineHeight: "30px",
+        fontSize: "0.625rem",
+        fontWeight: 600,
+        letterSpacing: "0.06em",
         textTransform: "uppercase",
         bgcolor: "transparent",
       }}
@@ -434,16 +434,16 @@ export function Layout() {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography
-            variant="h6"
-            noWrap
-            component="div"
-            sx={{ flexGrow: 1, fontSize: { xs: "1.05rem", sm: "1.25rem" } }}
-          >
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {isMobile ? "SalesManager" : "SalesManager CRM"}
           </Typography>
           {email && (
-            <Typography variant="body2" noWrap sx={{ display: { xs: "none", sm: "block" } }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              noWrap
+              sx={{ display: { xs: "none", sm: "block" } }}
+            >
               {email}
             </Typography>
           )}
@@ -451,9 +451,9 @@ export function Layout() {
             <Chip
               label={role}
               size="small"
-              color="secondary"
+              color="primary"
               variant="outlined"
-              sx={{ color: "inherit", borderColor: "rgba(255,255,255,0.5)" }}
+              sx={{ fontWeight: 500, fontSize: "0.7rem" }}
             />
           )}
           <IconButton color="inherit" onClick={handleOpenNotifications}>
@@ -544,8 +544,10 @@ export function Layout() {
           ) : (
             <Button
               color="inherit"
-              startIcon={<LogoutIcon />}
+              size="small"
+              startIcon={<LogoutIcon fontSize="small" />}
               onClick={handleLogout}
+              sx={{ color: "text.secondary" }}
             >
               Logout
             </Button>

@@ -19,9 +19,11 @@ export interface InvoiceLineItem {
   taxRatePercent: number;
   lineSubtotal: number;
   lineDiscountAmount: number;
+  lineTaxableAmount?: number;
   lineTaxAmount: number;
   lineCgstAmount: number;
   lineSgstAmount: number;
+  lineIgstAmount?: number;
   sortOrder: number;
 }
 
@@ -44,10 +46,17 @@ export interface Invoice {
   invoiceDate: string;
   dueDate: string | null;
   placeOfSupply: string | null;
+  placeOfSupplyStateId?: string | null;
   reverseCharge: boolean;
   quotationId: string | null;
   subtotal: number;
+  discountTotal?: number;
+  taxableAmount?: number;
+  cgstTotal?: number;
+  sgstTotal?: number;
+  igstTotal?: number;
   taxTotal: number;
+  roundOff?: number;
   grandTotal: number;
   status: InvoiceStatus;
   notes: string | null;
@@ -89,6 +98,8 @@ export interface CreateInvoicePayload {
   invoiceDate: string;
   dueDate?: string;
   placeOfSupply?: string;
+  /** STATE master-data id; compared with the billing profile's stateId to pick IGST vs CGST+SGST. */
+  placeOfSupplyStateId?: string;
   reverseCharge?: boolean;
   lineItems: InvoiceLineItemPayload[];
   notes?: string;

@@ -81,6 +81,7 @@ export function QuotationDetailPage() {
     );
   }
 
+  const isIgst = (quotation.igstTotal ?? 0) > 0;
   const canEdit = quotation.status === "DRAFT" || quotation.status === "SENT";
   const canDecide = quotation.status === "SENT";
   const canConvert = quotation.status === "SENT" || quotation.status === "APPROVED";
@@ -238,8 +239,14 @@ export function QuotationDetailPage() {
               <TableCell align="right">Qty</TableCell>
               <TableCell align="right">Unit Price</TableCell>
               <TableCell align="right">Discount %</TableCell>
-              <TableCell align="right">CGST</TableCell>
-              <TableCell align="right">SGST</TableCell>
+              {isIgst ? (
+                <TableCell align="right">IGST</TableCell>
+              ) : (
+                <>
+                  <TableCell align="right">CGST</TableCell>
+                  <TableCell align="right">SGST</TableCell>
+                </>
+              )}
               <TableCell align="right">Total</TableCell>
             </TableRow>
           </TableHead>
@@ -251,8 +258,14 @@ export function QuotationDetailPage() {
                 <TableCell align="right">{line.quantity}</TableCell>
                 <TableCell align="right">{line.unitPrice}</TableCell>
                 <TableCell align="right">{line.discountPercent}</TableCell>
-                <TableCell align="right">{line.lineCgstAmount}</TableCell>
-                <TableCell align="right">{line.lineSgstAmount}</TableCell>
+                {isIgst ? (
+                  <TableCell align="right">{line.lineIgstAmount}</TableCell>
+                ) : (
+                  <>
+                    <TableCell align="right">{line.lineCgstAmount}</TableCell>
+                    <TableCell align="right">{line.lineSgstAmount}</TableCell>
+                  </>
+                )}
                 <TableCell align="right">{line.lineTotal}</TableCell>
               </TableRow>
             ))}
@@ -263,8 +276,14 @@ export function QuotationDetailPage() {
           <Typography variant="body2">Sub Total: {quotation.subtotal}</Typography>
           <Typography variant="body2">Discount: {quotation.discountTotal}</Typography>
           <Typography variant="body2">Taxable Amount: {quotation.taxableAmount}</Typography>
-          <Typography variant="body2">CGST: {quotation.cgstTotal}</Typography>
-          <Typography variant="body2">SGST: {quotation.sgstTotal}</Typography>
+          {isIgst ? (
+            <Typography variant="body2">IGST: {quotation.igstTotal}</Typography>
+          ) : (
+            <>
+              <Typography variant="body2">CGST: {quotation.cgstTotal}</Typography>
+              <Typography variant="body2">SGST: {quotation.sgstTotal}</Typography>
+            </>
+          )}
           <Typography variant="subtitle1">Grand Total: {quotation.grandTotal}</Typography>
         </Stack>
       </Paper>

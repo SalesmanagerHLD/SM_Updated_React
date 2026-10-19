@@ -25,6 +25,7 @@ export interface QuotationLineItem {
   lineTaxableAmount: number;
   lineCgstAmount: number;
   lineSgstAmount: number;
+  lineIgstAmount?: number;
   lineTotal: number;
   sortOrder: number;
 }
@@ -70,6 +71,7 @@ export interface Quotation {
   taxableAmount: number;
   cgstTotal: number;
   sgstTotal: number;
+  igstTotal?: number;
   grandTotal: number;
   status: QuotationStatus;
   convertedInvoiceId: string | null;

@@ -51,17 +51,19 @@ import { CreatableMasterAutocomplete } from "../../components/CreatableMasterAut
 import { InterestReasonsField } from "../../components/InterestReasonsField";
 import { LEAD_STATUS_COLORS, LEAD_STATUS_LABELS } from "./leadStatusConfig";
 import { LeadAttachmentsSection } from "./LeadAttachmentsSection";
+import { LeadPurchaseOrdersSection } from "../purchaseorders/LeadPurchaseOrdersSection";
+import { useEntitlements } from "../../entitlement/EntitlementContext";
 import { LeadLostReasonDialog } from "./LeadLostReasonDialog";
 import { ReassignLeadDialog } from "./ReassignLeadDialog";
 import { VisitFormDialog } from "../visits/VisitFormDialog";
 import {
   ACTIVITY_TYPE_LABELS,
   resolveActorName,
-} from "../activity/activityConfig";
-
   activityIcon,
   activityColor,
   activityLabel,
+} from "../activity/activityConfig";
+
 const editSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   contactPerson: z.string().min(1, "Contact person is required"),
@@ -86,9 +88,9 @@ const editSchema = z.object({
   productIds: z.array(z.string()),
   interestLevelId: z.string().nullable(),
   interestLevelOther: z.string().nullable(),
+  interestReasonIds: z.array(z.string()),
   currentProductSolution: z.string(),
   budgetRange: z.string(),
-  interestReasonIds: z.array(z.string()),
   decisionMakerIdentified: z.boolean(),
   remarks: z.string(),
   nextFollowupDate: z.custom<Dayjs | null>(),
@@ -138,9 +140,9 @@ const emptyValues: EditFormValues = {
   productIds: [],
   interestLevelId: null,
   interestLevelOther: null,
+  interestReasonIds: [],
   currentProductSolution: "",
   budgetRange: "",
-  interestReasonIds: [],
   decisionMakerIdentified: false,
   remarks: "",
   nextFollowupDate: null,
@@ -157,6 +159,7 @@ export function LeadDetailPage() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const isAdmin = role === "ADMIN";
+  const { hasEntitlement } = useEntitlements();
 
   const { data: lead, isLoading, isError, error } = useLead(id);
   const updateMutation = useUpdateLead();
@@ -267,10 +270,10 @@ export function LeadDetailPage() {
       productIds: lead.productIds ?? [],
       interestLevelId: lead.interestLevelId,
       interestLevelOther: lead.interestLevelOther,
+      interestReasonIds: lead.interestReasonIds ?? [],
       currentProductSolution: lead.currentProductSolution ?? "",
       budgetRange: lead.budgetRange ?? "",
       decisionMakerIdentified: lead.decisionMakerIdentified ?? false,
-      interestReasonIds: lead.interestReasonIds ?? [],
       remarks: lead.remarks ?? "",
       nextFollowupDate: lead.nextFollowupDate ? dayjs(lead.nextFollowupDate) : null,
       expectedCloseDate: lead.expectedCloseDate
@@ -328,10 +331,10 @@ export function LeadDetailPage() {
       productIds: values.productIds,
       interestLevelId: values.interestLevelId ?? undefined,
       interestLevelOther: values.interestLevelOther ?? undefined,
+      interestReasonIds: values.interestReasonIds,
       currentProductSolution: values.currentProductSolution.trim() || undefined,
       budgetRange: values.budgetRange.trim() || undefined,
       decisionMakerIdentified: values.decisionMakerIdentified,
-      interestReasonIds: values.interestReasonIds,
       remarks: values.remarks.trim() || undefined,
       nextFollowupDate: values.nextFollowupDate
         ? values.nextFollowupDate.format("YYYY-MM-DD")
@@ -673,9 +676,6 @@ export function LeadDetailPage() {
               )}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }} sx={{ display: "flex", alignItems: "center" }}>
-            <Controller
-              control={form.control}
           <Grid size={{ xs: 12, sm: 6 }}>
             <Controller
               control={form.control}
@@ -689,6 +689,9 @@ export function LeadDetailPage() {
               )}
             />
           </Grid>
+          <Grid size={{ xs: 12, sm: 6 }} sx={{ display: "flex", alignItems: "center" }}>
+            <Controller
+              control={form.control}
               name="decisionMakerIdentified"
               render={({ field }) => (
                 <FormControlLabel
@@ -1041,10 +1044,11 @@ export function LeadDetailPage() {
       </Grid>
       </Grid>
 
+      {hasEntitlement("INVOICING") && <LeadPurchaseOrdersSection leadId={lead.id} />}
+
       <LeadLostReasonDialog
         open={lostDialogOpen}
         isPending={statusMutation.isPending}
-
         errorMessage={lostDialogOpen ? statusError : null}
         onCancel={() => setLostDialogOpen(false)}
         onConfirm={handleConfirmLost}

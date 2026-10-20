@@ -231,10 +231,11 @@ export async function deleteQuotationAttachment(attachmentId: string): Promise<v
   await axiosInstance.delete(`/quotations/attachments/${attachmentId}`);
 }
 
-export function useQuotations(params: GetQuotationsParams = {}) {
+export function useQuotations(params: GetQuotationsParams = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["quotations", params],
     queryFn: () => getQuotations(params),
+    enabled: options?.enabled ?? true,
   });
 }
 

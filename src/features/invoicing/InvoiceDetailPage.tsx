@@ -8,6 +8,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Link,
   Paper,
   Stack,
   Table,
@@ -29,9 +30,11 @@ import {
 } from "../../api/invoicesApi";
 import { parseApiError } from "../../api/errorHelpers";
 
-const STATUS_COLORS: Record<InvoiceStatus, "success" | "warning"> = {
+const STATUS_COLORS: Record<InvoiceStatus, "success" | "warning" | "info" | "error"> = {
   PAID: "success",
   UNPAID: "warning",
+  PARTIALLY_PAID: "info",
+  CANCELLED: "error",
 };
 
 export function InvoiceDetailPage() {
@@ -180,6 +183,25 @@ export function InvoiceDetailPage() {
           )}
           {invoice.placeOfSupply && (
             <Typography color="text.secondary">Place of Supply: {invoice.placeOfSupply}</Typography>
+          )}
+          {invoice.poNumber && (
+            <Typography color="text.secondary">
+              Customer PO:{" "}
+              {invoice.poId ? (
+                <Link component="button" variant="body1" sx={{ verticalAlign: "baseline" }}
+                  onClick={() => navigate(`/app/purchase-orders/${invoice.poId}`)}>
+                  {invoice.poNumber}
+                </Link>
+              ) : (
+                invoice.poNumber
+              )}
+              {invoice.poDate ? ` · ${dayjs(invoice.poDate).format("DD MMM YYYY")}` : ""}
+            </Typography>
+          )}
+          {invoice.poOverrideReason && (
+            <Typography color="warning.main" variant="body2">
+              Billed past the PO quantity (admin override): {invoice.poOverrideReason}
+            </Typography>
           )}
           <Typography color="text.secondary">Reverse Charge: {invoice.reverseCharge ? "Yes" : "No"}</Typography>
         </Paper>

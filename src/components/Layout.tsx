@@ -30,7 +30,6 @@ import TuneIcon from "@mui/icons-material/Tune";
 import PeopleIcon from "@mui/icons-material/People";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import GroupsIcon from "@mui/icons-material/Groups";
-import AssignmentIcon from "@mui/icons-material/Assignment";
 import HistoryIcon from "@mui/icons-material/History";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -46,6 +45,8 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ContactsIcon from "@mui/icons-material/Contacts";
 import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import dayjs from "dayjs";
 import { useAuth } from "../auth/AuthContext";
 import { useEntitlements } from "../entitlement/EntitlementContext";
@@ -97,6 +98,7 @@ export function Layout() {
   const hasLeaveManagement = hasEntitlement("EMPLOYEE_LEAVE_MANAGEMENT");
   const hasTeamVisibility = hasEntitlement("TEAM_VISIBILITY");
   const hasInventoryManagement = hasEntitlement("INVENTORY_MANAGEMENT");
+  const hasInvoicing = hasEntitlement("INVOICING");
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -290,10 +292,12 @@ export function Layout() {
         </>
       )}
 
-      {hasInventoryManagement && (
+      {(hasInventoryManagement || hasInvoicing) && (
         <>
           <NavSectionHeader label="Inventory" />
 
+          {hasInvoicing && (
+            <>
           <ListItemButton
             selected={location.pathname.startsWith("/app/customers")}
             onClick={() => handleNavigate("/app/customers")}
@@ -304,6 +308,11 @@ export function Layout() {
             <ListItemText primary="Customers" />
           </ListItemButton>
 
+            </>
+          )}
+
+          {hasInventoryManagement && (
+            <>
           <ListItemButton
             selected={location.pathname.startsWith("/app/inventory/products")}
             onClick={() => handleNavigate("/app/inventory/products")}
@@ -313,7 +322,11 @@ export function Layout() {
             </ListItemIcon>
             <ListItemText primary="Products" />
           </ListItemButton>
+            </>
+          )}
 
+          {hasInvoicing && (
+            <>
           <ListItemButton
             selected={location.pathname.startsWith("/app/quotations")}
             onClick={() => handleNavigate("/app/quotations")}
@@ -325,6 +338,16 @@ export function Layout() {
           </ListItemButton>
 
           <ListItemButton
+            selected={location.pathname.startsWith("/app/purchase-orders")}
+            onClick={() => handleNavigate("/app/purchase-orders")}
+          >
+            <ListItemIcon>
+              <AssignmentTurnedInIcon />
+            </ListItemIcon>
+            <ListItemText primary="Purchase orders" />
+          </ListItemButton>
+
+          <ListItemButton
             selected={location.pathname.startsWith("/app/invoices")}
             onClick={() => handleNavigate("/app/invoices")}
           >
@@ -333,6 +356,8 @@ export function Layout() {
             </ListItemIcon>
             <ListItemText primary="Invoices" />
           </ListItemButton>
+            </>
+          )}
         </>
       )}
 
@@ -593,6 +618,12 @@ export function Layout() {
         sx={{
           flexGrow: 1,
           width: { xs: "100%", md: `calc(100% - ${DRAWER_WIDTH}px)` },
+          // The window never scrolls: main is exactly one screen tall. List pages fill the area
+          // below (PageFill) so only their table scrolls; every other page scrolls inside it.
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         <Toolbar />
@@ -603,9 +634,3 @@ export function Layout() {
     </Box>
   );
 }
-          // The window never scrolls: main is exactly one screen tall. List pages fill the area
-          // below (PageFill) so only their table scrolls; every other page scrolls inside it.
-          height: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",

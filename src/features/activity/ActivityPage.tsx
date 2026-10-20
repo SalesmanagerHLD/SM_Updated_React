@@ -10,7 +10,6 @@ import {
   CircularProgress,
   Link as MuiLink,
   MenuItem,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -31,16 +30,18 @@ import type { ActivityEntry, ActivityType } from "../../api/activityApi";
 import { ACTIVITY_TYPES, getActivity, useActivity } from "../../api/activityApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { TypeIconAvatar } from "../../components/TypeIconAvatar";
 import {
-  ACTIVITY_TYPE_COLORS,
-  ACTIVITY_TYPE_ICONS,
   ACTIVITY_TYPE_LABELS,
   resolveActorName,
+  activityIcon,
+  activityColor,
+  activityLabel,
 } from "./activityConfig";
-
-const PAGE_SIZE = 20;
 
 /**
  * Org-wide (Admin) / team (manager with TEAM_VISIBILITY) / personal (Employee) activity feed -
@@ -60,6 +61,7 @@ export function ActivityPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [typeFilter, setTypeFilter] = useState<ActivityType | "">("");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -72,7 +74,7 @@ export function ActivityPage() {
 
   const { data, isLoading, isError, error } = useActivity({
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
     type: typeFilter || undefined,
     ownerId: canFilterByOwner ? ownerFilter || undefined : undefined,
   });
@@ -106,7 +108,7 @@ export function ActivityPage() {
         ownerId: canFilterByOwner ? ownerFilter || undefined : undefined,
       });
       exportToCsv<ActivityEntry>(`activity-${dayjs().format("YYYY-MM-DD")}.csv`, all.content, [
-        { label: "Type", value: (e) => ACTIVITY_TYPE_LABELS[e.type] },
+        { label: "Type", value: (e) => activityLabel(e.type) },
         { label: "Description", value: (e) => e.description },
         { label: "Company", value: (e) => e.companyName },
         { label: "Actor", value: (e) => resolveActorName(e.actorId, employeeNameById) },
@@ -120,7 +122,7 @@ export function ActivityPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Typography variant="h5" sx={{ mb: 2 }}>
         Activity
       </Typography>
@@ -213,12 +215,12 @@ export function ActivityPage() {
           {isMobile && visibleActivity.length > 0 && (
             <Stack spacing={0}>
               {visibleActivity.map((entry, index) => {
-                const Icon = ACTIVITY_TYPE_ICONS[entry.type];
+                const Icon = activityIcon(entry.type);
                 const isLast = index === visibleActivity.length - 1;
                 return (
                   <Stack key={entry.id} direction="row" spacing={1.5}>
                     <Stack sx={{ alignItems: "center" }}>
-                      <TypeIconAvatar icon={Icon} color={ACTIVITY_TYPE_COLORS[entry.type]} />
+                      <TypeIconAvatar icon={Icon} color={activityColor(entry.type)} />
                       {!isLast && <Box sx={{ width: 2, flexGrow: 1, bgcolor: "divider", my: 0.5 }} />}
                     </Stack>
                     <Card variant="outlined" sx={{ flexGrow: 1, mb: isLast ? 0 : 1.5 }}>
@@ -228,8 +230,8 @@ export function ActivityPage() {
                           sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}
                         >
                           <Chip
-                            label={ACTIVITY_TYPE_LABELS[entry.type]}
-                            color={ACTIVITY_TYPE_COLORS[entry.type]}
+                            label={activityLabel(entry.type)}
+                            color={activityColor(entry.type)}
                             size="small"
                           />
                           <Typography variant="caption" color="text.secondary">
@@ -270,16 +272,16 @@ export function ActivityPage() {
                 </TableHead>
                 <TableBody>
                   {visibleActivity.map((entry) => {
-                    const Icon = ACTIVITY_TYPE_ICONS[entry.type];
+                    const Icon = activityIcon(entry.type);
                     return (
                       <TableRow key={entry.id} hover>
                         <TableCell>
-                          <TypeIconAvatar icon={Icon} color={ACTIVITY_TYPE_COLORS[entry.type]} size={32} />
+                          <TypeIconAvatar icon={Icon} color={activityColor(entry.type)} size={32} />
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={ACTIVITY_TYPE_LABELS[entry.type]}
-                            color={ACTIVITY_TYPE_COLORS[entry.type]}
+                            label={activityLabel(entry.type)}
+                            color={activityColor(entry.type)}
                             size="small"
                           />
                         </TableCell>
@@ -306,17 +308,29 @@ export function ActivityPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
-    </Box>
+    </PageFill>
   );
 }

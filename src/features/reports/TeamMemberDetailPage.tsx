@@ -26,10 +26,10 @@ import { parseApiError } from "../../api/errorHelpers";
 import { LEAD_STATUS_COLORS, LEAD_STATUS_LABELS } from "../leads/leadStatusConfig";
 import { TypeIconAvatar } from "../../components/TypeIconAvatar";
 import {
-  ACTIVITY_TYPE_COLORS,
-  ACTIVITY_TYPE_ICONS,
-  ACTIVITY_TYPE_LABELS,
   resolveActorName,
+  activityIcon,
+  activityColor,
+  activityLabel,
 } from "../activity/activityConfig";
 
 const LEADS_PAGE_SIZE = 100;
@@ -125,7 +125,7 @@ export function TeamMemberDetailPage() {
             )}
 
             {leadsPage && leadsPage.content.length > 0 && (
-              <TableContainer sx={{ overflowX: "auto" }}>
+              <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -185,12 +185,12 @@ export function TeamMemberDetailPage() {
             {activityPage && activityPage.content.length > 0 && (
               <Stack spacing={0}>
                 {activityPage.content.map((entry, index) => {
-                  const Icon = ACTIVITY_TYPE_ICONS[entry.type];
+                  const Icon = activityIcon(entry.type);
                   const isLast = index === activityPage.content.length - 1;
                   return (
                     <Stack key={entry.id} direction="row" spacing={2}>
                       <Stack sx={{ alignItems: "center" }}>
-                        <TypeIconAvatar icon={Icon} color={ACTIVITY_TYPE_COLORS[entry.type]} />
+                        <TypeIconAvatar icon={Icon} color={activityColor(entry.type)} />
                         {!isLast && (
                           <Box sx={{ width: 2, flexGrow: 1, bgcolor: "divider", my: 0.5 }} />
                         )}
@@ -198,8 +198,8 @@ export function TeamMemberDetailPage() {
                       <Box sx={{ pb: 2.5, minWidth: 0 }}>
                         <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.25 }}>
                           <Chip
-                            label={ACTIVITY_TYPE_LABELS[entry.type]}
-                            color={ACTIVITY_TYPE_COLORS[entry.type]}
+                            label={activityLabel(entry.type)}
+                            color={activityColor(entry.type)}
                             size="small"
                           />
                           <Typography variant="caption" color="text.secondary">

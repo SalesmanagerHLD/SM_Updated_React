@@ -11,7 +11,6 @@ import {
   Chip,
   CircularProgress,
   MenuItem,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -35,13 +34,14 @@ import type { Lead, LeadStatus } from "../../api/leadsApi";
 import { LEAD_STATUSES, getLeads, useLeads } from "../../api/leadsApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { LEAD_STATUS_COLORS, LEAD_STATUS_LABELS } from "./leadStatusConfig";
 import { LeadCreateDialog } from "./LeadCreateDialog";
 import { AddVisitEntryDialog } from "./AddVisitEntryDialog";
 import { VisitFormDialog } from "../visits/VisitFormDialog";
-
-const PAGE_SIZE = 20;
 
 export function LeadListPage() {
   const navigate = useNavigate();
@@ -64,6 +64,7 @@ export function LeadListPage() {
   const isValidInitialStatus = (LEAD_STATUSES as string[]).includes(initialStatus ?? "");
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "">(
     isValidInitialStatus ? (initialStatus as LeadStatus) : "",
   );
@@ -86,7 +87,7 @@ export function LeadListPage() {
 
   const { data, isLoading, isError, error } = useLeads({
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
     status: statusFilter || undefined,
     interestLevelId: interestLevelFilter || undefined,
     ownerId: canFilterByOwner ? ownerFilter || undefined : undefined,
@@ -158,7 +159,7 @@ export function LeadListPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack
         direction="row"
         sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
@@ -411,15 +412,27 @@ export function LeadListPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
 
@@ -449,6 +462,6 @@ export function LeadListPage() {
           lead={visitDialogLead}
         />
       )}
-    </Box>
+    </PageFill>
   );
 }

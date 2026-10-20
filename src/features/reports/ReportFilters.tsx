@@ -35,6 +35,7 @@ type SelectKey =
   | "cityId"
   | "productId"
   | "interestLevelId"
+  | "interestReasonId"
   | "businessTypeId";
 type DateKey = "nextFollowupDate" | "expectedCloseDate";
 
@@ -47,6 +48,7 @@ const EMPTY: ReportFilterValues = {
   cityId: "",
   productId: "",
   interestLevelId: "",
+  interestReasonId: "",
   businessTypeId: "",
   nextFollowupDate: null,
   expectedCloseDate: null,
@@ -116,6 +118,7 @@ export function useReportFilters() {
       cityId: values.cityId || undefined,
       productId: values.productId || undefined,
       interestLevelId: values.interestLevelId || undefined,
+      interestReasonId: values.interestReasonId || undefined,
       businessTypeId: values.businessTypeId || undefined,
       nextFollowupDate: fmt(values.nextFollowupDate),
       expectedCloseDate: fmt(values.expectedCloseDate),
@@ -165,6 +168,8 @@ export function ReportFilterBar({ filters, scope = "all" }: ReportFilterBarProps
   const { data: products } = useMasterData("PRODUCT");
   const { data: interestLevels } = useMasterData("INTEREST_LEVEL");
   const { data: businessTypes } = useMasterData("BUSINESS_TYPE");
+  const { data: interestReasons } = useMasterData("INTEREST_REASON", true);
+  const levelLabelById = new Map((interestLevels ?? []).map((i) => [i.id, i.label]));
 
   const selects: { key: SelectKey; label: string; options: { id: string; label: string }[]; leadsToo: boolean }[] = [
     {
@@ -180,6 +185,16 @@ export function ReportFilterBar({ filters, scope = "all" }: ReportFilterBarProps
       key: "interestLevelId",
       label: "Interest",
       options: (interestLevels ?? []).map((i) => ({ id: i.id, label: i.label })),
+      leadsToo: true,
+    },
+    {
+      key: "interestReasonId",
+      label: "Interest reason",
+      // "Hot: Budget approved" - the level is part of the name since reasons repeat across levels.
+      options: (interestReasons ?? []).map((r) => ({
+        id: r.id,
+        label: `${r.parentId ? (levelLabelById.get(r.parentId) ?? "") : ""}: ${r.label}`.replace(/^: /, ""),
+      })),
       leadsToo: true,
     },
     {

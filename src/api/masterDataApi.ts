@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { axiosInstance } from "./axiosInstance";
 
-/** The 11 reference-data types the backend supports, one generic endpoint set for all. */
+/** The 12 reference-data types the backend supports, one generic endpoint set for all. */
 export const MASTER_DATA_TYPES = [
   "INDUSTRY",
   "CITY",
@@ -18,6 +18,7 @@ export const MASTER_DATA_TYPES = [
   "INTEREST_LEVEL",
   "LEAD_SOURCE",
   "STATE",
+  "INTEREST_REASON",
 ] as const;
 
 export type MasterDataType = (typeof MASTER_DATA_TYPES)[number];
@@ -40,6 +41,8 @@ export interface CreateMasterDataPayload {
   code: string;
   label: string;
   sortOrder?: number;
+  /** For child types (e.g. INTEREST_REASON under an INTEREST_LEVEL): the parent row's id. */
+  parentId?: string;
 }
 
 export interface UpdateMasterDataPayload {
@@ -101,10 +104,15 @@ export function masterDataQueryKey(
  * screen (with includeInactive=true, to also show deactivated rows) and by any
  * dropdown consumer elsewhere (with the default includeInactive=false).
  */
-export function useMasterData(type: MasterDataType, includeInactive = false) {
+export function useMasterData(
+  type: MasterDataType,
+  includeInactive = false,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: masterDataQueryKey(type, includeInactive),
     queryFn: () => getMasterData(type, includeInactive),
+    enabled: options.enabled ?? true,
   });
 }
 

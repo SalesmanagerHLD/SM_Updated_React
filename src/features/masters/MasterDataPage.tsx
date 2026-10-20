@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import dayjs from "dayjs";
 import {
@@ -7,6 +7,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   IconButton,
   Paper,
   Stack,
@@ -25,9 +26,10 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import type { MasterDataItem, MasterDataType } from "../../api/masterDataApi";
 import {
-  MASTER_DATA_TYPES,
   useDeactivateMasterData,
   useMasterData,
   useUpdateMasterData,
@@ -35,12 +37,15 @@ import {
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
 import { TableToolbar } from "../../components/TableToolbar";
+import { PageFill } from "../../components/PageFill";
 import {
   DEFAULT_MASTER_DATA_TYPE,
+  MASTER_TAB_TYPES,
   MASTER_TYPE_LABELS,
   isMasterDataType,
 } from "./masterTypeConfig";
 import { MasterDataFormDialog } from "./MasterDataFormDialog";
+import { InterestReasonsPanel } from "./InterestReasonsPanel";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 
 function MasterDataTable({ type }: { type: MasterDataType }) {
@@ -54,6 +59,11 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
     useState<MasterDataItem | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // Interest levels expand to show (and add) the reasons that sit under them.
+  const hasReasons = type === "INTEREST_LEVEL";
+  const { data: reasons } = useMasterData("INTEREST_REASON", true, { enabled: hasReasons });
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const columnCount = hasReasons ? 6 : 5;
 
   const openCreateDialog = () => {
     setEditingItem(null);
@@ -131,7 +141,7 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
   };
 
   return (
-    <Box>
+    <PageFill nested>
       <Stack
         direction="row"
         sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
@@ -164,6 +174,7 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
         <Table size="small">
           <TableHead>
             <TableRow>
+              {hasReasons && <TableCell sx={{ width: 40 }} />}
               <TableCell>Code</TableCell>
               <TableCell>Label</TableCell>
               <TableCell align="right">Sort order</TableCell>
@@ -174,7 +185,7 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
           <TableBody>
             {items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} align="center">
+                <TableCell colSpan={columnCount} align="center">
                   <Typography color="text.secondary" sx={{ py: 3 }}>
                     No entries yet.
                   </Typography>
@@ -191,11 +202,33 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
               </TableRow>
             )}
             {visibleItems.map((item) => (
-              <TableRow key={item.id} hover>
+              <Fragment key={item.id}>
+              <TableRow
+                hover
+                onClick={hasReasons ? () => setExpandedId((id) => (id === item.id ? null : item.id)) : undefined}
+                sx={hasReasons ? { cursor: "pointer", "& > td": { borderBottom: expandedId === item.id ? 0 : undefined } } : undefined}
+              >
+                {hasReasons && (
+                  <TableCell padding="checkbox">
+                    <IconButton size="small" aria-label={expandedId === item.id ? "Hide reasons" : "Show reasons"}>
+                      {expandedId === item.id ? <KeyboardArrowDownIcon /> : <KeyboardArrowRightIcon />}
+                    </IconButton>
+                  </TableCell>
+                )}
                 <TableCell>
                   <code>{item.code}</code>
                 </TableCell>
-                <TableCell>{item.label}</TableCell>
+                <TableCell>
+                  {item.label}
+                  {hasReasons && (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      sx={{ ml: 1 }}
+                      label={`${(reasons ?? []).filter((r) => r.parentId === item.id && r.active).length} reasons`}
+                    />
+                  )}
+                </TableCell>
                 <TableCell align="right">{item.sortOrder}</TableCell>
                 <TableCell>
                   <Chip
@@ -204,7 +237,7 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
                     size="small"
                   />
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                   <Tooltip title="Edit">
                     <IconButton size="small" onClick={() => openEditDialog(item)}>
                       <EditIcon fontSize="small" />
@@ -232,6 +265,16 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
                   )}
                 </TableCell>
               </TableRow>
+              {hasReasons && (
+                <TableRow>
+                  <TableCell colSpan={columnCount} sx={{ py: 0, borderBottom: expandedId === item.id ? undefined : 0 }}>
+                    <Collapse in={expandedId === item.id} unmountOnExit>
+                      <InterestReasonsPanel level={item} />
+                    </Collapse>
+                  </TableCell>
+                </TableRow>
+              )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
@@ -255,7 +298,7 @@ function MasterDataTable({ type }: { type: MasterDataType }) {
           onConfirm={handleConfirmDeactivate}
         />
       )}
-    </Box>
+    </PageFill>
   );
 }
 
@@ -274,7 +317,7 @@ export function MasterDataPage() {
   const type = typeParam;
 
   return (
-    <Box>
+    <PageFill>
       <Typography variant="h5" gutterBottom>
         Master Data
       </Typography>
@@ -285,13 +328,13 @@ export function MasterDataPage() {
           variant="scrollable"
           scrollButtons="auto"
         >
-          {MASTER_DATA_TYPES.map((t) => (
+          {MASTER_TAB_TYPES.map((t) => (
             <Tab key={t} value={t} label={MASTER_TYPE_LABELS[t]} />
           ))}
         </Tabs>
       </Paper>
 
       <MasterDataTable key={type} type={type} />
-    </Box>
+    </PageFill>
   );
 }

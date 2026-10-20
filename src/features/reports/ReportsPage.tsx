@@ -6,8 +6,8 @@ import {
   Box,
   Button,
   Chip,
+  LinearProgress,
   Grid,
-  Pagination,
   Paper,
   Stack,
   Tab,
@@ -48,10 +48,12 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import GridOnIcon from "@mui/icons-material/GridOn";
 import PlaceIcon from "@mui/icons-material/Place";
 import GroupWorkIcon from "@mui/icons-material/GroupWork";
+import PsychologyAltIcon from "@mui/icons-material/PsychologyAlt";
 import { LEAD_STATUSES, getLeads, useLeads } from "../../api/leadsApi";
 import type { LeadStatus } from "../../api/leadsApi";
 import {
   useInterestLevelStatusMatrix,
+  useInterestReasons,
   useLeadDashboard,
   usePipelineSummary,
   useTeamProgress,
@@ -72,6 +74,8 @@ import {
 } from "../../components/dashboardParts";
 import type { DonutSlice, PaletteKey } from "../../components/dashboardParts";
 import { DataTable } from "../../components/DataTable";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { ReportFilterBar, ReportPeriodBar, useReportFilters } from "./ReportFilters";
 import type { ReportFilters } from "./ReportFilters";
 
@@ -85,8 +89,6 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 const CHART_HEIGHT = 240;
-const TABLE_MAX_HEIGHT = 320;
-const LEADS_PAGE_SIZE = 20;
 
 const pct = (value: number) => `${value.toFixed(1)}%`;
 
@@ -142,6 +144,85 @@ function StatRows({ rows }: { rows: { label: string; value: number; color?: Pale
 }
 
 // ───────────────────────────── Overview ─────────────────────────────
+
+/** Which MUI palette colour an interest level's bars use - by its name, so Hot/Warm/Cold keep
+ * their familiar red/amber/blue even if an admin renames or adds levels. */
+function levelColor(label: string): "error" | "warning" | "info" | "primary" {
+  const name = label.toLowerCase();
+  if (name.includes("hot")) return "error";
+  if (name.includes("warm")) return "warning";
+  if (name.includes("cold")) return "info";
+  return "primary";
+}
+
+/** "Why is it Hot/Warm/Cold?" - for each interest level, the reasons admins defined and how many
+ * leads carry each (a lead with several reasons counts once under each). */
+function InterestReasonsCard({ filters }: { filters: ReportFilters }) {
+  const { data, isLoading, isError, error } = useInterestReasons({
+    dateFrom: filters.params.dateFrom,
+    dateTo: filters.params.dateTo,
+  });
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, { reason: string; count: number }[]>();
+    for (const row of data?.rows ?? []) {
+      map.set(row.interestLevel, [...(map.get(row.interestLevel) ?? []), { reason: row.reason, count: row.count }]);
+    }
+    return [...map.entries()];
+  }, [data]);
+
+  return (
+    <DashCard icon={<PsychologyAltIcon />} color="secondary" title="Why leads are Hot / Warm / Cold">
+      {isLoading && <SectionLoading />}
+      {isError && <ErrorNote error={error} />}
+      {data && grouped.length === 0 && (
+        <EmptyNote>
+          No reasons recorded yet. Admins can set them up under Masters → Interest Reason, then pick them when adding a
+          lead.
+        </EmptyNote>
+      )}
+      {grouped.length > 0 && (
+        <Grid container spacing={3}>
+          {grouped.map(([level, reasons]) => {
+            const max = Math.max(...reasons.map((r) => r.count), 1);
+            const color = levelColor(level);
+            return (
+              <Grid key={level} size={{ xs: 12, md: 6, xl: 4 }}>
+                <Chip size="small" label={level} color={color} sx={{ mb: 1 }} />
+                <Stack spacing={1}>
+                  {reasons.map((r) => (
+                    <Box key={r.reason}>
+                      <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                        <Typography variant="body2" noWrap>
+                          {r.reason}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {r.count}
+                        </Typography>
+                      </Stack>
+                      <LinearProgress
+                        variant="determinate"
+                        color={color}
+                        value={(r.count / max) * 100}
+                        sx={{ height: 6, borderRadius: 3 }}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
+      {data && grouped.length > 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
+          {data.leadsWithReasons} lead{data.leadsWithReasons === 1 ? "" : "s"} with reasons. Follows the period; other
+          filters don't apply here.
+        </Typography>
+      )}
+    </DashCard>
+  );
+}
 
 function OverviewTab({ filters }: { filters: ReportFilters }) {
   const theme = useTheme();
@@ -253,6 +334,8 @@ function OverviewTab({ filters }: { filters: ReportFilters }) {
           </DashCard>
         </Grid>
       </Grid>
+
+      <InterestReasonsCard filters={filters} />
     </Stack>
   );
 }
@@ -266,6 +349,7 @@ function LeadsTab({ filters }: { filters: ReportFilters }) {
     status: params.status,
     ownerId: params.ownerId,
     interestLevelId: params.interestLevelId,
+    interestReasonId: params.interestReasonId,
     stateId: params.stateId,
     cityId: params.cityId,
     productId: params.productId,
@@ -276,10 +360,11 @@ function LeadsTab({ filters }: { filters: ReportFilters }) {
   const filterKey = JSON.stringify(leadParams);
   const [pageState, setPageState] = useState({ key: filterKey, page: 0 });
   const page = pageState.key === filterKey ? pageState.page : 0;
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
 
-  const { data, isLoading, isError, error } = useLeads({ ...leadParams, page, size: LEADS_PAGE_SIZE });
+  const { data, isLoading, isError, error } = useLeads({ ...leadParams, page, size: pageSize });
   const matrix = useInterestLevelStatusMatrix();
 
   const handleExport = async () => {
@@ -335,19 +420,17 @@ function LeadsTab({ filters }: { filters: ReportFilters }) {
                 { label: "Created", render: (l) => dayjs(l.createdAt).format("DD MMM YYYY") },
               ]}
             />
-            <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mt: 1.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                {data.totalElements} lead{data.totalElements === 1 ? "" : "s"}
-              </Typography>
-              {data.totalPages > 1 && (
-                <Pagination
-                  size="small"
-                  count={data.totalPages}
-                  page={page + 1}
-                  onChange={(_, next) => setPageState({ key: filterKey, page: next - 1 })}
-                />
-              )}
-            </Stack>
+            <TablePager
+              page={page}
+              totalPages={data.totalPages}
+              totalElements={data.totalElements}
+              pageSize={pageSize}
+              onPageChange={(next) => setPageState({ key: filterKey, page: next })}
+              onPageSizeChange={(n) => {
+                setPageSize(n);
+                setPageState({ key: filterKey, page: 0 });
+              }}
+            />
           </>
         )}
       </DashCard>
@@ -399,7 +482,6 @@ function PerformanceTab({ filters }: { filters: ReportFilters }) {
         <>
           <DashCard icon={<LeaderboardIcon />} title="Employee Performance">
             <DataTable
-              maxHeight={TABLE_MAX_HEIGHT}
               rows={data.employeePerformance}
               rowKey={(r) => r.employeeName}
               columns={[
@@ -417,7 +499,6 @@ function PerformanceTab({ filters }: { filters: ReportFilters }) {
             <Grid size={{ xs: 12, lg: 6 }}>
               <DashCard icon={<BusinessIcon />} color="info" title="Company Wise">
                 <DataTable
-                  maxHeight={TABLE_MAX_HEIGHT}
                   rows={data.companyWiseSummary.slice(0, 50)}
                   rowKey={(r) => r.company}
                   columns={[
@@ -433,7 +514,6 @@ function PerformanceTab({ filters }: { filters: ReportFilters }) {
             <Grid size={{ xs: 12, lg: 6 }}>
               <DashCard icon={<LocationCityIcon />} color="warning" title="City Wise">
                 <DataTable
-                  maxHeight={TABLE_MAX_HEIGHT}
                   rows={data.cityWiseSummary.slice(0, 50)}
                   rowKey={(r) => r.city}
                   columns={[
@@ -448,7 +528,6 @@ function PerformanceTab({ filters }: { filters: ReportFilters }) {
             <Grid size={{ xs: 12, lg: 6 }}>
               <DashCard icon={<InventoryIcon />} color="success" title="Product Performance">
                 <DataTable
-                  maxHeight={TABLE_MAX_HEIGHT}
                   rows={data.productPerformance.slice(0, 50)}
                   rowKey={(r) => r.product}
                   columns={[
@@ -463,7 +542,6 @@ function PerformanceTab({ filters }: { filters: ReportFilters }) {
             <Grid size={{ xs: 12, lg: 6 }}>
               <DashCard icon={<WhatshotOutlinedIcon />} color="error" title="Interest Level Performance">
                 <DataTable
-                  maxHeight={TABLE_MAX_HEIGHT}
                   rows={data.interestLevelPerformance}
                   rowKey={(r) => r.interestLevel}
                   columns={[
@@ -489,7 +567,6 @@ function PerformanceTab({ filters }: { filters: ReportFilters }) {
         {pipeline.isError && <ErrorNote error={pipeline.error} />}
         {pipeline.data && (
           <DataTable
-            maxHeight={TABLE_MAX_HEIGHT}
             rows={pipeline.data.byOwner}
             rowKey={(o) => o.ownerId}
             columns={[

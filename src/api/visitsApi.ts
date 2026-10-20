@@ -34,6 +34,7 @@ export interface Visit {
   address: string | null;
   requirements: string | null;
   productIds: string[];
+  interestReasonIds: string[];
   productsOther: string | null;
   budgetRange: string | null;
   decisionMakerIdentified: boolean | null;
@@ -77,6 +78,7 @@ export interface VisitPayloadFields {
   address?: string;
   requirements?: string;
   productIds?: string[];
+  interestReasonIds?: string[];
   productsOther?: string;
   budgetRange?: string;
   decisionMakerIdentified?: boolean;

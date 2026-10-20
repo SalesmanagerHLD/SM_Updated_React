@@ -177,19 +177,11 @@ export function createAppTheme(settings: EffectiveThemeSettings): Theme {
         }),
       },
     },
-    // Every table keeps its header frozen: the container scrolls vertically (capped to the
-    // viewport) and the sticky header stays put while rows scroll underneath it. A table that
-    // sets its own maxHeight via sx still wins over this default.
+    // Header cells stick to the top of their table's scroll box. List pages (see PageFill) make
+    // that box fill the screen, so the page itself stays put and only the rows scroll.
     MuiTable: {
       defaultProps: {
         stickyHeader: true,
-      },
-    },
-    MuiTableContainer: {
-      styleOverrides: {
-        root: {
-          maxHeight: "calc(100vh - 220px)",
-        },
       },
     },
     MuiChip: {

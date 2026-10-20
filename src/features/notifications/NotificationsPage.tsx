@@ -12,7 +12,6 @@ import {
   CircularProgress,
   FormControlLabel,
   MenuItem,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -38,6 +37,9 @@ import {
 } from "../../api/notificationsApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { TypeIconAvatar } from "../../components/TypeIconAvatar";
 import {
@@ -49,8 +51,6 @@ import {
   isNotificationVisible,
 } from "../../utils/notificationFormat";
 import { useEntitlements } from "../../entitlement/EntitlementContext";
-
-const PAGE_SIZE = 20;
 
 /**
  * Full notification history - the bell dropdown (Layout) only ever shows the latest 10 with a
@@ -66,6 +66,7 @@ export function NotificationsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [typeFilter, setTypeFilter] = useState<NotificationType | "">("");
   const [search, setSearch] = useState("");
@@ -74,7 +75,7 @@ export function NotificationsPage() {
 
   const { data, isLoading, isError, error } = useNotifications(unreadOnly, {
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
   });
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   const markReadMutation = useMarkNotificationRead();
@@ -123,7 +124,7 @@ export function NotificationsPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h5">Notifications</Typography>
         <Button
@@ -343,17 +344,29 @@ export function NotificationsPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
-    </Box>
+    </PageFill>
   );
 }

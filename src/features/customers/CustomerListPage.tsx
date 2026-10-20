@@ -9,7 +9,6 @@ import {
   Chip,
   CircularProgress,
   IconButton,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -29,10 +28,11 @@ import type { Customer } from "../../api/customersApi";
 import { getCustomers, useCustomers } from "../../api/customersApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { CustomerFormDialog } from "./CustomerFormDialog";
-
-const PAGE_SIZE = 20;
 
 /**
  * Create/update are open to any entitled employee (not ADMIN-only, unlike Product) - a rep
@@ -43,6 +43,7 @@ export function CustomerListPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [search, setSearch] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -53,7 +54,7 @@ export function CustomerListPage() {
     search: search || undefined,
     includeInactive: true,
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
   });
 
   const rows = useMemo(() => data?.content ?? [], [data]);
@@ -89,7 +90,7 @@ export function CustomerListPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h5">Customers</Typography>
         <Button startIcon={<AddIcon />} variant="contained" onClick={openCreateDialog}>
@@ -207,15 +208,27 @@ export function CustomerListPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
 
@@ -224,6 +237,6 @@ export function CustomerListPage() {
         onClose={() => setFormDialogOpen(false)}
         customer={editingCustomer}
       />
-    </Box>
+    </PageFill>
   );
 }

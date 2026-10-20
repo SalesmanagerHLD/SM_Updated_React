@@ -9,7 +9,6 @@ import {
   Chip,
   CircularProgress,
   IconButton,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -32,20 +31,22 @@ import { getEmployees, useDeactivateEmployee, useEmployees } from "../../api/emp
 import { useMasterData } from "../../api/masterDataApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { EmployeeFormDialog } from "./EmployeeFormDialog";
 import { EmployeeImportDialog } from "./EmployeeImportDialog";
 
-const PAGE_SIZE = 20;
-
 export function EmployeeListPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const { data, isLoading, isError, error } = useEmployees({
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
   });
   const deactivateMutation = useDeactivateEmployee();
 
@@ -136,7 +137,7 @@ export function EmployeeListPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack
         direction="row"
         sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
@@ -345,15 +346,27 @@ export function EmployeeListPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
 
@@ -376,6 +389,6 @@ export function EmployeeListPage() {
           onConfirm={handleConfirmDeactivate}
         />
       )}
-    </Box>
+    </PageFill>
   );
 }

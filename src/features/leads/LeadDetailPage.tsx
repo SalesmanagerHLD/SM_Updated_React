@@ -48,18 +48,20 @@ import type { ActivityType } from "../../api/activityApi";
 import { ACTIVITY_TYPES, useActivity } from "../../api/activityApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { CreatableMasterAutocomplete } from "../../components/CreatableMasterAutocomplete";
+import { InterestReasonsField } from "../../components/InterestReasonsField";
 import { LEAD_STATUS_COLORS, LEAD_STATUS_LABELS } from "./leadStatusConfig";
 import { LeadAttachmentsSection } from "./LeadAttachmentsSection";
 import { LeadLostReasonDialog } from "./LeadLostReasonDialog";
 import { ReassignLeadDialog } from "./ReassignLeadDialog";
 import { VisitFormDialog } from "../visits/VisitFormDialog";
 import {
-  ACTIVITY_TYPE_COLORS,
-  ACTIVITY_TYPE_ICONS,
   ACTIVITY_TYPE_LABELS,
   resolveActorName,
 } from "../activity/activityConfig";
 
+  activityIcon,
+  activityColor,
+  activityLabel,
 const editSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   contactPerson: z.string().min(1, "Contact person is required"),
@@ -86,6 +88,7 @@ const editSchema = z.object({
   interestLevelOther: z.string().nullable(),
   currentProductSolution: z.string(),
   budgetRange: z.string(),
+  interestReasonIds: z.array(z.string()),
   decisionMakerIdentified: z.boolean(),
   remarks: z.string(),
   nextFollowupDate: z.custom<Dayjs | null>(),
@@ -137,6 +140,7 @@ const emptyValues: EditFormValues = {
   interestLevelOther: null,
   currentProductSolution: "",
   budgetRange: "",
+  interestReasonIds: [],
   decisionMakerIdentified: false,
   remarks: "",
   nextFollowupDate: null,
@@ -266,6 +270,7 @@ export function LeadDetailPage() {
       currentProductSolution: lead.currentProductSolution ?? "",
       budgetRange: lead.budgetRange ?? "",
       decisionMakerIdentified: lead.decisionMakerIdentified ?? false,
+      interestReasonIds: lead.interestReasonIds ?? [],
       remarks: lead.remarks ?? "",
       nextFollowupDate: lead.nextFollowupDate ? dayjs(lead.nextFollowupDate) : null,
       expectedCloseDate: lead.expectedCloseDate
@@ -326,6 +331,7 @@ export function LeadDetailPage() {
       currentProductSolution: values.currentProductSolution.trim() || undefined,
       budgetRange: values.budgetRange.trim() || undefined,
       decisionMakerIdentified: values.decisionMakerIdentified,
+      interestReasonIds: values.interestReasonIds,
       remarks: values.remarks.trim() || undefined,
       nextFollowupDate: values.nextFollowupDate
         ? values.nextFollowupDate.format("YYYY-MM-DD")
@@ -670,6 +676,19 @@ export function LeadDetailPage() {
           <Grid size={{ xs: 12, sm: 6 }} sx={{ display: "flex", alignItems: "center" }}>
             <Controller
               control={form.control}
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <Controller
+              control={form.control}
+              name="interestReasonIds"
+              render={({ field }) => (
+                <InterestReasonsField
+                  interestLevelId={form.watch("interestLevelId")}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </Grid>
               name="decisionMakerIdentified"
               render={({ field }) => (
                 <FormControlLabel
@@ -962,7 +981,7 @@ export function LeadDetailPage() {
         {!activityLoading && (activityPage?.content.length ?? 0) > 0 && (
           <Stack spacing={0}>
             {activityPage!.content.map((entry, index) => {
-              const Icon = ACTIVITY_TYPE_ICONS[entry.type];
+              const Icon = activityIcon(entry.type);
               const isLast = index === activityPage!.content.length - 1;
               return (
                 <Stack key={entry.id} direction="row" spacing={2}>
@@ -975,8 +994,8 @@ export function LeadDetailPage() {
                         width: 32,
                         height: 32,
                         borderRadius: "50%",
-                        bgcolor: `${ACTIVITY_TYPE_COLORS[entry.type]}.main`,
-                        color: `${ACTIVITY_TYPE_COLORS[entry.type]}.contrastText`,
+                        bgcolor: `${activityColor(entry.type)}.main`,
+                        color: `${activityColor(entry.type)}.contrastText`,
                         flexShrink: 0,
                       }}
                     >
@@ -1000,7 +1019,7 @@ export function LeadDetailPage() {
                       sx={{ alignItems: "center", mb: 0.25 }}
                     >
                       <Typography variant="subtitle2">
-                        {ACTIVITY_TYPE_LABELS[entry.type]}
+                        {activityLabel(entry.type)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {dayjs(entry.createdAt).format("DD MMM YYYY, HH:mm")}
@@ -1025,6 +1044,7 @@ export function LeadDetailPage() {
       <LeadLostReasonDialog
         open={lostDialogOpen}
         isPending={statusMutation.isPending}
+
         errorMessage={lostDialogOpen ? statusError : null}
         onCancel={() => setLostDialogOpen(false)}
         onConfirm={handleConfirmLost}

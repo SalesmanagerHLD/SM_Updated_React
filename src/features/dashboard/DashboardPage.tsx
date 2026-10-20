@@ -77,15 +77,10 @@ import {
 import type { DonutSlice } from "../../components/dashboardParts";
 import { LEAD_STATUS_COLORS, LEAD_STATUS_LABELS } from "../leads/leadStatusConfig";
 import {
-  ACTIVITY_TYPE_COLORS,
-  ACTIVITY_TYPE_ICONS,
   resolveActorName,
+  activityIcon,
+  activityColor,
 } from "../activity/activityConfig";
-
-const VISIT_TYPE_LABELS: Record<Visit["visitType"], string> = {
-  FIELD: "Field",
-  TELEPHONIC: "Phone",
-};
 
 /** Only the stages that represent forward progress - LOST/LAPSED are drop-offs and are covered
  * by the Lead Status chart. A bar chart (not a funnel): stage counts aren't strictly shrinking,
@@ -268,7 +263,6 @@ function VisitRow({ visit, showDate }: { visit: Visit; showDate: boolean }) {
           {when || "No time set"}
         </Typography>
       </Box>
-      <Chip label={VISIT_TYPE_LABELS[visit.visitType]} size="small" variant="outlined" />
     </Stack>
   );
 }
@@ -336,8 +330,8 @@ function RecentActivityCard() {
           {entries.map((entry) => (
             <Stack key={entry.id} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <TypeIconAvatar
-                icon={ACTIVITY_TYPE_ICONS[entry.type]}
-                color={ACTIVITY_TYPE_COLORS[entry.type]}
+                icon={activityIcon(entry.type)}
+                color={activityColor(entry.type)}
                 size={30}
               />
               <Box sx={{ minWidth: 0, flexGrow: 1 }}>

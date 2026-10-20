@@ -592,13 +592,20 @@ export function Layout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
           width: { xs: "100%", md: `calc(100% - ${DRAWER_WIDTH}px)` },
         }}
       >
         <Toolbar />
-        <Outlet />
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 3 }}>
+          <Outlet />
+        </Box>
       </Box>
     </Box>
   );
 }
+          // The window never scrolls: main is exactly one screen tall. List pages fill the area
+          // below (PageFill) so only their table scrolls; every other page scrolls inside it.
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",

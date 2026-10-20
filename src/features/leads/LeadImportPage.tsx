@@ -93,7 +93,7 @@ function MapAndDefaultsStep({
       </Typography>
 
       <Paper variant="outlined">
-        <TableContainer sx={{ overflowX: "auto", maxHeight: 320 }}>
+        <TableContainer>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>

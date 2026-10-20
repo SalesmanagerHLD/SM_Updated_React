@@ -15,14 +15,13 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
   emptyText?: string;
-  maxHeight?: number;
 }
 
 /** Compact report table in the dashboard's style: small uppercase column labels, tight rows,
  * frozen header (the theme makes every table's header sticky and opaque), optional row click. */
-export function DataTable<T>({ columns, rows, rowKey, onRowClick, emptyText = "No data yet.", maxHeight }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, onRowClick, emptyText = "No data yet." }: DataTableProps<T>) {
   return (
-    <TableContainer sx={maxHeight ? { maxHeight } : undefined}>
+    <TableContainer>
       <Table size="small">
         <TableHead>
           <TableRow>

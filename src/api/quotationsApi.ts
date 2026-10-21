@@ -25,6 +25,7 @@ export interface QuotationLineItem {
   lineTaxableAmount: number;
   lineCgstAmount: number;
   lineSgstAmount: number;
+  lineIgstAmount?: number;
   lineTotal: number;
   sortOrder: number;
 }
@@ -70,6 +71,7 @@ export interface Quotation {
   taxableAmount: number;
   cgstTotal: number;
   sgstTotal: number;
+  igstTotal?: number;
   grandTotal: number;
   status: QuotationStatus;
   convertedInvoiceId: string | null;
@@ -229,10 +231,11 @@ export async function deleteQuotationAttachment(attachmentId: string): Promise<v
   await axiosInstance.delete(`/quotations/attachments/${attachmentId}`);
 }
 
-export function useQuotations(params: GetQuotationsParams = {}) {
+export function useQuotations(params: GetQuotationsParams = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["quotations", params],
     queryFn: () => getQuotations(params),
+    enabled: options?.enabled ?? true,
   });
 }
 

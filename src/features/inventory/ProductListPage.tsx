@@ -9,7 +9,6 @@ import {
   Chip,
   CircularProgress,
   IconButton,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -31,11 +30,12 @@ import type { Product } from "../../api/productsApi";
 import { getProducts, useProducts } from "../../api/productsApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { ProductFormDialog } from "./ProductFormDialog";
 import { StockAdjustmentDialog } from "./StockAdjustmentDialog";
-
-const PAGE_SIZE = 20;
 
 /**
  * Admin-managed Product catalog + stock. GET is open to any entitled user (an employee
@@ -49,6 +49,7 @@ export function ProductListPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [search, setSearch] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function ProductListPage() {
   const { data, isLoading, isError, error } = useProducts({
     includeInactive: true,
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
   });
 
   const visibleProducts = useMemo(() => {
@@ -108,7 +109,7 @@ export function ProductListPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h5">Products</Typography>
         {isAdmin && (
@@ -261,15 +262,27 @@ export function ProductListPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
 
@@ -287,6 +300,6 @@ export function ProductListPage() {
           />
         </>
       )}
-    </Box>
+    </PageFill>
   );
 }

@@ -35,6 +35,7 @@ import { useCheckLeadDuplicates, useCreateLead } from "../../api/leadsApi";
 import { useMasterData } from "../../api/masterDataApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { CreatableMasterAutocomplete } from "../../components/CreatableMasterAutocomplete";
+import { InterestReasonsField } from "../../components/InterestReasonsField";
 import { useAuth } from "../../auth/AuthContext";
 
 /** Last-used City/Lead Source/Industry, remembered per-org for the rest of the browser tab's
@@ -109,6 +110,7 @@ const schema = z
     productIds: z.array(z.string()),
     interestLevelId: z.string().nullable(),
     interestLevelOther: z.string().nullable(),
+    interestReasonIds: z.array(z.string()),
     currentProductSolution: z.string(),
     budgetRange: z.string(),
     decisionMakerIdentified: z.boolean(),
@@ -154,6 +156,7 @@ const emptyValues: FormValues = {
   productIds: [],
   interestLevelId: null,
   interestLevelOther: null,
+  interestReasonIds: [],
   currentProductSolution: "",
   budgetRange: "",
   decisionMakerIdentified: false,
@@ -260,6 +263,7 @@ export function LeadCreateDialog({ open, onClose }: LeadCreateDialogProps) {
         productIds: values.productIds.length > 0 ? values.productIds : undefined,
         interestLevelId: values.interestLevelId ?? undefined,
         interestLevelOther: values.interestLevelOther ?? undefined,
+        interestReasonIds: values.interestReasonIds.length > 0 ? values.interestReasonIds : undefined,
         currentProductSolution: values.currentProductSolution.trim() || undefined,
         budgetRange: values.budgetRange.trim() || undefined,
         decisionMakerIdentified: values.decisionMakerIdentified,
@@ -519,6 +523,17 @@ export function LeadCreateDialog({ open, onClose }: LeadCreateDialogProps) {
                     field.onChange(id);
                     form.setValue("interestLevelOther", other);
                   }}
+                />
+              )}
+            />
+            <Controller
+              control={form.control}
+              name="interestReasonIds"
+              render={({ field }) => (
+                <InterestReasonsField
+                  interestLevelId={form.watch("interestLevelId")}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
                 />
               )}
             />

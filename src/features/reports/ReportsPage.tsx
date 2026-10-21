@@ -1,29 +1,30 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
-import type { Dayjs } from "dayjs";
 import {
   Alert,
   Box,
   Button,
   Chip,
-  CircularProgress,
+  LinearProgress,
   Grid,
-  MenuItem,
-  Pagination,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
+  Tab,
+  Tabs,
   Typography,
-  useTheme,
 } from "@mui/material";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { useTheme } from "@mui/material/styles";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import GroupsIcon from "@mui/icons-material/Groups";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
@@ -34,24 +35,25 @@ import AcUnitIcon from "@mui/icons-material/AcUnit";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import CancelIcon from "@mui/icons-material/Cancel";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import DonutLargeIcon from "@mui/icons-material/DonutLarge";
+import BusinessIcon from "@mui/icons-material/Business";
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
+import TodayIcon from "@mui/icons-material/Today";
+import PersonIcon from "@mui/icons-material/Person";
+import LocationCityIcon from "@mui/icons-material/LocationCity";
+import InventoryIcon from "@mui/icons-material/Inventory2";
+import WhatshotOutlinedIcon from "@mui/icons-material/WhatshotOutlined";
+import LeaderboardIcon from "@mui/icons-material/Leaderboard";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import GridOnIcon from "@mui/icons-material/GridOn";
+import PlaceIcon from "@mui/icons-material/Place";
+import GroupWorkIcon from "@mui/icons-material/GroupWork";
+import PsychologyAltIcon from "@mui/icons-material/PsychologyAlt";
 import { LEAD_STATUSES, getLeads, useLeads } from "../../api/leadsApi";
 import type { LeadStatus } from "../../api/leadsApi";
 import {
-  useConversionRate,
   useInterestLevelStatusMatrix,
+  useInterestReasons,
   useLeadDashboard,
   usePipelineSummary,
   useTeamProgress,
@@ -59,23 +61,41 @@ import {
   useVisitsCompletedVsMissed,
 } from "../../api/reportingApi";
 import type { TeamMemberProgress } from "../../api/reportingApi";
-import { useMasterData } from "../../api/masterDataApi";
-import { useEmployees } from "../../api/employeesApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { LEAD_STATUS_COLORS, LEAD_STATUS_LABELS } from "../leads/leadStatusConfig";
-import { StatCard } from "../../components/StatCard";
 import { exportToCsv } from "../../utils/exportToCsv";
+import {
+  DashCard,
+  DonutWithLegend,
+  EmptyNote,
+  KpiCard,
+  SectionLoading,
+  useChartStyles,
+} from "../../components/dashboardParts";
+import type { DonutSlice, PaletteKey } from "../../components/dashboardParts";
+import { DataTable } from "../../components/DataTable";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
+import { ReportFilterBar, ReportPeriodBar, useReportFilters } from "./ReportFilters";
+import type { ReportFilters } from "./ReportFilters";
 
-/**
- * Maps the app-wide MUI Chip color names used for lead statuses (defined once in
- * leadStatusConfig.ts) to actual hex values from the active theme, so the pipeline
- * pie chart uses exactly the same status-color scheme as the rest of the app
- * (lead list/detail chips) rather than a second, independently invented palette.
- */
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "leads", label: "Leads" },
+  { id: "performance", label: "Performance" },
+  { id: "visits", label: "Visits" },
+  { id: "team", label: "Team" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+const CHART_HEIGHT = 240;
+
+const pct = (value: number) => `${value.toFixed(1)}%`;
+
 function useLeadStatusHexColors(): Record<LeadStatus, string> {
   const theme = useTheme();
   return useMemo(() => {
-    const chipColorToHex: Record<string, string> = {
+    const hex: Record<string, string> = {
       info: theme.palette.info.main,
       primary: theme.palette.primary.main,
       warning: theme.palette.warning.main,
@@ -84,559 +104,274 @@ function useLeadStatusHexColors(): Record<LeadStatus, string> {
       default: theme.palette.grey[500],
     };
     const result = {} as Record<LeadStatus, string>;
-    for (const status of LEAD_STATUSES) {
-      result[status] = chipColorToHex[LEAD_STATUS_COLORS[status]];
-    }
+    for (const status of LEAD_STATUSES) result[status] = hex[LEAD_STATUS_COLORS[status]];
     return result;
   }, [theme]);
 }
 
-function SectionLoading() {
+function ExportButton({ onClick, disabled, loading }: { onClick: () => void; disabled?: boolean; loading?: boolean }) {
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-      <CircularProgress />
-    </Box>
+    <Button size="small" startIcon={<FileDownloadIcon />} onClick={onClick} disabled={disabled || loading}>
+      {loading ? "Exporting…" : "Export"}
+    </Button>
   );
 }
 
-function PipelineSummarySection() {
-  const { data, isLoading, isError, error } = usePipelineSummary();
-  const statusColors = useLeadStatusHexColors();
-
-  return (
-    <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
-      <Typography variant="h6" gutterBottom>
-        Pipeline Summary
-      </Typography>
-
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && (
-        <>
-          <Box sx={{ mb: 2 }}>
-            <StatCard
-              icon={<GroupsIcon />}
-              color="primary"
-              value={data.totalLeads}
-              label="Total leads"
-            />
-          </Box>
-
-          {data.totalLeads === 0 ? (
-            <Typography color="text.secondary">No leads yet.</Typography>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={LEAD_STATUSES.map((status) => ({
-                    name: LEAD_STATUS_LABELS[status],
-                    value: data.byStatus[status] ?? 0,
-                    status,
-                  }))}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  // Zero-value slices have no arc, so their label anchors collapse to the
-                  // same point and overlap illegibly - only label slices that actually
-                  // render (the Legend below still lists every status regardless).
-                  label={({ name, value }) => (value > 0 ? `${name}: ${value}` : "")}
-                >
-                  {LEAD_STATUSES.map((status) => (
-                    <Cell key={status} fill={statusColors[status]} />
-                  ))}
-                </Pie>
-                <Legend />
-                <RechartsTooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </>
-      )}
-    </Paper>
-  );
+function ErrorNote({ error }: { error: unknown }) {
+  return <Alert severity="error">{parseApiError(error).message}</Alert>;
 }
 
-function ConversionRateSection() {
-  const { data, isLoading, isError, error } = useConversionRate();
-
+/** Label / value rows - used for the small follow-up and expected-closure summaries. */
+function StatRows({ rows }: { rows: { label: string; value: number; color?: PaletteKey }[] }) {
   return (
-    <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
-      <Typography variant="h6" gutterBottom>
-        Conversion Rate
-      </Typography>
-
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && (
-        <Stack spacing={2} sx={{ py: 1 }}>
-          <StatCard
-            icon={<EmojiEventsIcon />}
-            color="success"
-            value={`${data.conversionRatePercent.toFixed(2)}%`}
-            label={`${data.closedWonCount} closed-won of ${data.totalLeads} leads`}
-          />
-          <Typography color="text.secondary">
-            {data.lostCount} lost
+    <Stack spacing={0}>
+      {rows.map((row) => (
+        <Stack
+          key={row.label}
+          direction="row"
+          sx={{ justifyContent: "space-between", py: 0.9, borderBottom: 1, borderColor: "divider", "&:last-child": { borderBottom: 0 } }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            {row.label}
+          </Typography>
+          <Typography variant="body2" sx={{ fontWeight: 600 }} color={row.color ? `${row.color}.main` : undefined}>
+            {row.value}
           </Typography>
         </Stack>
-      )}
-    </Paper>
+      ))}
+    </Stack>
   );
 }
 
-function VisitsCompletedVsMissedSection() {
-  const [dateFrom, setDateFrom] = useState<Dayjs | null>(null);
-  const [dateTo, setDateTo] = useState<Dayjs | null>(null);
-  const theme = useTheme();
+// ───────────────────────────── Overview ─────────────────────────────
 
-  const { data, isLoading, isError, error } = useVisitsCompletedVsMissed(
-    dateFrom ? dateFrom.format("YYYY-MM-DD") : undefined,
-    dateTo ? dateTo.format("YYYY-MM-DD") : undefined,
-  );
+/** Which MUI palette colour an interest level's bars use - by its name, so Hot/Warm/Cold keep
+ * their familiar red/amber/blue even if an admin renames or adds levels. */
+function levelColor(label: string): "error" | "warning" | "info" | "primary" {
+  const name = label.toLowerCase();
+  if (name.includes("hot")) return "error";
+  if (name.includes("warm")) return "warning";
+  if (name.includes("cold")) return "info";
+  return "primary";
+}
 
-  const chartData = data
-    ? [
-        { name: "Completed", value: data.completed, key: "completed" },
-        { name: "Missed", value: data.missed, key: "missed" },
-        { name: "Planned", value: data.planned, key: "planned" },
-      ]
-    : [];
+/** "Why is it Hot/Warm/Cold?" - for each interest level, the reasons admins defined and how many
+ * leads carry each (a lead with several reasons counts once under each). */
+function InterestReasonsCard({ filters }: { filters: ReportFilters }) {
+  const { data, isLoading, isError, error } = useInterestReasons({
+    dateFrom: filters.params.dateFrom,
+    dateTo: filters.params.dateTo,
+  });
 
-  const barColors: Record<string, string> = {
-    completed: theme.palette.success.main,
-    missed: theme.palette.error.main,
-    planned: theme.palette.info.main,
-  };
+  const grouped = useMemo(() => {
+    const map = new Map<string, { reason: string; count: number }[]>();
+    for (const row of data?.rows ?? []) {
+      map.set(row.interestLevel, [...(map.get(row.interestLevel) ?? []), { reason: row.reason, count: row.count }]);
+    }
+    return [...map.entries()];
+  }, [data]);
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
-      <Typography variant="h6" gutterBottom>
-        Visits Completed vs Missed
-      </Typography>
-
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
-        <DatePicker
-          label="From"
-          value={dateFrom}
-          onChange={setDateFrom}
-          slotProps={{ textField: { fullWidth: true, size: "small" } }}
-        />
-        <DatePicker
-          label="To"
-          value={dateTo}
-          onChange={setDateTo}
-          slotProps={{ textField: { fullWidth: true, size: "small" } }}
-        />
-      </Stack>
-
+    <DashCard icon={<PsychologyAltIcon />} color="secondary" title="Why leads are Hot / Warm / Cold">
       {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && (
-        <>
-          <Box sx={{ mb: 2 }}>
-            <StatCard
-              icon={<EventAvailableIcon />}
-              color="success"
-              value={`${data.completionRatePercent.toFixed(2)}%`}
-              label={`${data.completed} completed, ${data.missed} missed`}
-            />
-          </Box>
-
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis allowDecimals={false} />
-              <RechartsTooltip />
-              <Bar dataKey="value" name="Visits">
-                {chartData.map((entry) => (
-                  <Cell key={entry.key} fill={barColors[entry.key]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </>
+      {isError && <ErrorNote error={error} />}
+      {data && grouped.length === 0 && (
+        <EmptyNote>
+          No reasons recorded yet. Admins can set them up under Masters → Interest Reason, then pick them when adding a
+          lead.
+        </EmptyNote>
       )}
-    </Paper>
-  );
-}
-
-function OwnerBreakdownSection() {
-  const { data, isLoading, isError, error } = usePipelineSummary();
-
-  const handleExport = () => {
-    if (!data) return;
-    exportToCsv(
-      `per-salesperson-breakdown-${dayjs().format("YYYY-MM-DD")}.csv`,
-      data.byOwner,
-      [
-        { label: "Owner", value: (o) => o.ownerName },
-        { label: "Lead Count", value: (o) => o.leadCount },
-        { label: "Closed-Won Count", value: (o) => o.closedWonCount },
-        {
-          label: "Win Rate",
-          value: (o) => (o.leadCount === 0 ? "" : `${((o.closedWonCount / o.leadCount) * 100).toFixed(1)}%`),
-        },
-      ],
-    );
-  };
-
-  return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h6" gutterBottom>
-          Per-Salesperson Breakdown
+      {grouped.length > 0 && (
+        <Grid container spacing={3}>
+          {grouped.map(([level, reasons]) => {
+            const max = Math.max(...reasons.map((r) => r.count), 1);
+            const color = levelColor(level);
+            return (
+              <Grid key={level} size={{ xs: 12, md: 6, xl: 4 }}>
+                <Chip size="small" label={level} color={color} sx={{ mb: 1 }} />
+                <Stack spacing={1}>
+                  {reasons.map((r) => (
+                    <Box key={r.reason}>
+                      <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                        <Typography variant="body2" noWrap>
+                          {r.reason}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {r.count}
+                        </Typography>
+                      </Stack>
+                      <LinearProgress
+                        variant="determinate"
+                        color={color}
+                        value={(r.count / max) * 100}
+                        sx={{ height: 6, borderRadius: 3 }}
+                      />
+                    </Box>
+                  ))}
+                </Stack>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
+      {data && grouped.length > 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
+          {data.leadsWithReasons} lead{data.leadsWithReasons === 1 ? "" : "s"} with reasons. Follows the period; other
+          filters don't apply here.
         </Typography>
-        {data && data.byOwner.length > 0 && (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={handleExport}
-          >
-            Export CSV
-          </Button>
-        )}
-      </Stack>
-
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Owner</TableCell>
-                <TableCell align="right">Lead Count</TableCell>
-                <TableCell align="right">Closed-Won Count</TableCell>
-                <TableCell align="right">Win Rate</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.byOwner.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    <Typography color="text.secondary" sx={{ py: 3 }}>
-                      No data yet.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-              {data.byOwner.map((owner) => (
-                <TableRow key={owner.ownerId} hover>
-                  <TableCell>{owner.ownerName}</TableCell>
-                  <TableCell align="right">{owner.leadCount}</TableCell>
-                  <TableCell align="right">{owner.closedWonCount}</TableCell>
-                  <TableCell align="right">
-                    {owner.leadCount === 0
-                      ? "—"
-                      : `${((owner.closedWonCount / owner.leadCount) * 100).toFixed(1)}%`}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
       )}
-    </Paper>
+    </DashCard>
   );
 }
 
-const VISIT_TYPE_LABELS: Record<"FIELD" | "TELEPHONIC", string> = {
-  FIELD: "Field",
-  TELEPHONIC: "Telephonic",
-};
-
-function VisitsByTypeSection() {
-  const [dateFrom, setDateFrom] = useState<Dayjs | null>(null);
-  const [dateTo, setDateTo] = useState<Dayjs | null>(null);
+function OverviewTab({ filters }: { filters: ReportFilters }) {
   const theme = useTheme();
+  const chart = useChartStyles();
+  const statusColors = useLeadStatusHexColors();
+  const { data, isLoading, isError, error } = useLeadDashboard(filters.params);
+  const pipeline = usePipelineSummary();
 
-  const { data, isLoading, isError, error } = useVisitsByType(
-    dateFrom ? dateFrom.format("YYYY-MM-DD") : undefined,
-    dateTo ? dateTo.format("YYYY-MM-DD") : undefined,
-  );
+  if (isLoading) return <SectionLoading />;
+  if (isError) return <ErrorNote error={error} />;
+  if (!data) return null;
 
-  const chartData = data
-    ? (["FIELD", "TELEPHONIC"] as const).map((type) => ({
-        name: VISIT_TYPE_LABELS[type],
-        value: data.byType[type] ?? 0,
-        key: type,
-      }))
-    : [];
-  const barColors: Record<string, string> = {
-    FIELD: theme.palette.primary.main,
-    TELEPHONIC: theme.palette.secondary.main,
-  };
+  const interestSlices: DonutSlice[] = [
+    { label: "Hot", value: data.hotLeads, color: theme.palette.error.main },
+    { label: "Warm", value: data.warmLeads, color: theme.palette.warning.main },
+    { label: "Cold", value: data.coldLeads, color: theme.palette.info.main },
+    { label: "Not set", value: data.notSetInterestCount, color: theme.palette.grey[500] },
+  ];
+  const interestTotal = interestSlices.reduce((sum, s) => sum + s.value, 0);
+  const statusSlices: DonutSlice[] = LEAD_STATUSES.map((status) => ({
+    label: LEAD_STATUS_LABELS[status],
+    value: pipeline.data?.byStatus[status] ?? 0,
+    color: statusColors[status],
+  }));
+
+  const kpis: { label: string; value: string | number; caption: string; icon: React.ReactNode; color: PaletteKey }[] = [
+    { label: "Total Leads", value: data.totalLeads, caption: "Matching filters", icon: <GroupsIcon />, color: "primary" },
+    { label: "Hot", value: data.hotLeads, caption: "High interest", icon: <LocalFireDepartmentIcon />, color: "error" },
+    { label: "Warm", value: data.warmLeads, caption: "Medium interest", icon: <WhatshotIcon />, color: "warning" },
+    { label: "Cold", value: data.coldLeads, caption: "Low interest", icon: <AcUnitIcon />, color: "info" },
+    { label: "Today's Follow-ups", value: data.todayFollowUpCount, caption: "Due today", icon: <EventAvailableIcon />, color: "primary" },
+    { label: "Overdue", value: data.overdueFollowUpCount, caption: "Follow-ups missed", icon: <EventBusyIcon />, color: "error" },
+    { label: "Closed Won", value: data.closedWonCount, caption: "Converted", icon: <EmojiEventsIcon />, color: "success" },
+    { label: "Closed Lost", value: data.closedLostCount, caption: "Lost", icon: <CancelIcon />, color: "error" },
+    { label: "Conversion", value: pct(data.conversionRatePercent), caption: "Won / total", icon: <TrendingUpIcon />, color: "success" },
+    { label: "Closing This Month", value: data.expectedClosures.thisMonth, caption: "Expected closures", icon: <TodayIcon />, color: "secondary" },
+  ];
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
-      <Typography variant="h6" gutterBottom>
-        Visits by Type
-      </Typography>
+    <Stack spacing={2}>
+      <Grid container spacing={2}>
+        {kpis.map((kpi) => (
+          <Grid key={kpi.label} size={{ xs: 6, sm: 4, md: 3, lg: 2.4 }}>
+            <KpiCard {...kpi} />
+          </Grid>
+        ))}
+      </Grid>
 
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
-        <DatePicker
-          label="From"
-          value={dateFrom}
-          onChange={setDateFrom}
-          slotProps={{ textField: { fullWidth: true, size: "small" } }}
-        />
-        <DatePicker
-          label="To"
-          value={dateTo}
-          onChange={setDateTo}
-          slotProps={{ textField: { fullWidth: true, size: "small" } }}
-        />
-      </Stack>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6, xl: 3 }}>
+          <DashCard icon={<WhatshotOutlinedIcon />} color="error" title="By Interest Level">
+            {interestTotal === 0 ? (
+              <EmptyNote>No leads match.</EmptyNote>
+            ) : (
+              <Box sx={{ minHeight: CHART_HEIGHT, display: "flex" }}>
+                <DonutWithLegend slices={interestSlices} centerValue={interestTotal} centerLabel="LEADS" />
+              </Box>
+            )}
+          </DashCard>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6, xl: 3 }}>
+          <DashCard icon={<DonutLargeIcon />} color="info" title="Pipeline by Status">
+            {pipeline.isLoading && <SectionLoading />}
+            {pipeline.data && pipeline.data.totalLeads === 0 && <EmptyNote>No leads yet.</EmptyNote>}
+            {pipeline.data && pipeline.data.totalLeads > 0 && (
+              <Box sx={{ minHeight: CHART_HEIGHT, display: "flex" }}>
+                <DonutWithLegend
+                  slices={statusSlices.filter((s) => s.value > 0)}
+                  centerValue={pipeline.data.totalLeads}
+                  centerLabel="ALL LEADS"
+                />
+              </Box>
+            )}
+          </DashCard>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6, xl: 3 }}>
+          <DashCard icon={<BusinessIcon />} color="warning" title="By Business Type">
+            {data.byBusinessType.length === 0 ? (
+              <EmptyNote>No data.</EmptyNote>
+            ) : (
+              <Box sx={{ height: CHART_HEIGHT }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.byBusinessType} layout="vertical" margin={{ left: 0, right: 12, top: 4, bottom: 4 }}>
+                    <CartesianGrid horizontal={false} stroke={chart.grid} strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: chart.axis }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 11, fill: chart.axis }} axisLine={false} tickLine={false} />
+                    <RechartsTooltip {...chart.tooltip} />
+                    <Bar dataKey="count" name="Leads" fill={theme.palette.primary.main} radius={[0, 4, 4, 0]} barSize={16} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            )}
+          </DashCard>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6, xl: 3 }}>
+          <DashCard icon={<TodayIcon />} color="primary" title="Follow-ups & Closures">
+            <StatRows
+              rows={[
+                { label: "Today", value: data.followUpSummary.todayCount },
+                { label: "Tomorrow", value: data.followUpSummary.tomorrowCount },
+                { label: "Next 7 days", value: data.followUpSummary.next7DaysCount },
+                { label: "Overdue", value: data.followUpSummary.overdueCount, color: "error" },
+                { label: "Unassigned", value: data.followUpSummary.unassignedCount },
+                { label: "Closing this week", value: data.expectedClosures.thisWeek },
+                { label: "Closing this month", value: data.expectedClosures.thisMonth },
+                { label: "Closing next month", value: data.expectedClosures.nextMonth },
+              ]}
+            />
+          </DashCard>
+        </Grid>
+      </Grid>
 
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && data.total === 0 && (
-        <Typography color="text.secondary">No visits yet.</Typography>
-      )}
-
-      {data && data.total > 0 && (
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis allowDecimals={false} />
-            <RechartsTooltip />
-            <Bar dataKey="value" name="Visits">
-              {chartData.map((entry) => (
-                <Cell key={entry.key} fill={barColors[entry.key]} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </Paper>
+      <InterestReasonsCard filters={filters} />
+    </Stack>
   );
 }
 
-function InterestLevelStatusMatrixSection() {
-  const { data, isLoading, isError, error } = useInterestLevelStatusMatrix();
+// ───────────────────────────── Leads ─────────────────────────────
 
-  return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Interest Level x Status
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        How many leads at each interest level (Hot/Warm/Cold) sit in each pipeline stage.
-      </Typography>
-
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && (
-        <TableContainer sx={{ overflowX: "auto" }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Interest Level</TableCell>
-                {LEAD_STATUSES.map((status) => (
-                  <TableCell key={status} align="right">
-                    {LEAD_STATUS_LABELS[status]}
-                  </TableCell>
-                ))}
-                <TableCell align="right">Total</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.rows.map((row) => (
-                <TableRow key={row.interestLevel} hover>
-                  <TableCell>{row.interestLevel}</TableCell>
-                  {LEAD_STATUSES.map((status) => (
-                    <TableCell key={status} align="right">
-                      {row.byStatus[status] ?? 0}
-                    </TableCell>
-                  ))}
-                  <TableCell align="right">
-                    <strong>{row.total}</strong>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </Paper>
-  );
-}
-
-/**
- * Read-only "who's doing what" rollup for a manager/admin overseeing a team - one row per
- * team member (Admins see every other active employee; an entitled manager sees their
- * subordinates - see ReportingService#resolveTeamMemberIds) with their lead counts by status,
- * visits due today/in the next 7 days, and when they were last active in the system. No
- * drill-down/edit actions here - purely a scan-the-team-at-a-glance view for now.
- */
-function TeamProgressSection() {
+function LeadsTab({ filters }: { filters: ReportFilters }) {
   const navigate = useNavigate();
-  const { data, isLoading, isError, error } = useTeamProgress();
-
-  const handleExport = () => {
-    if (!data) return;
-    exportToCsv(
-      `team-progress-${dayjs().format("YYYY-MM-DD")}.csv`,
-      data.members,
-      [
-        { label: "Team Member", value: (m) => m.employeeName },
-        { label: "Total Leads", value: (m) => m.totalLeads },
-        ...LEAD_STATUSES.map((status) => ({
-          label: LEAD_STATUS_LABELS[status],
-          value: (m: TeamMemberProgress) => m.leadCountsByStatus[status] ?? 0,
-        })),
-        { label: "Visits Due Today", value: (m) => m.visitsDueToday },
-        { label: "Visits Upcoming (7d)", value: (m) => m.visitsUpcoming },
-        {
-          label: "Last Activity",
-          value: (m) => (m.lastActivityAt ? dayjs(m.lastActivityAt).format("YYYY-MM-DD HH:mm") : ""),
-        },
-      ],
-    );
+  const { params } = filters;
+  const leadParams = {
+    status: params.status,
+    ownerId: params.ownerId,
+    interestLevelId: params.interestLevelId,
+    interestReasonId: params.interestReasonId,
+    stateId: params.stateId,
+    cityId: params.cityId,
+    productId: params.productId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
   };
-
-  return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}>
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Team Progress
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Each team member's current lead pipeline, upcoming visits, and last activity.
-          </Typography>
-        </Box>
-        {data && data.members.length > 0 && (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={handleExport}
-          >
-            Export CSV
-          </Button>
-        )}
-      </Stack>
-
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && data.members.length === 0 && (
-        <Typography color="text.secondary">No team members to show yet.</Typography>
-      )}
-
-      {data && data.members.length > 0 && (
-        <TableContainer sx={{ overflowX: "auto" }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Team Member</TableCell>
-                <TableCell align="right">Total Leads</TableCell>
-                {LEAD_STATUSES.map((status) => (
-                  <TableCell key={status} align="right">
-                    {LEAD_STATUS_LABELS[status]}
-                  </TableCell>
-                ))}
-                <TableCell align="right">Due Today</TableCell>
-                <TableCell align="right">Upcoming (7d)</TableCell>
-                <TableCell>Last Activity</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.members.map((member) => (
-                <TableRow
-                  key={member.employeeId}
-                  hover
-                  sx={{ cursor: "pointer" }}
-                  onClick={() => navigate(`/app/team/${member.employeeId}`)}
-                >
-                  <TableCell>{member.employeeName}</TableCell>
-                  <TableCell align="right">
-                    <strong>{member.totalLeads}</strong>
-                  </TableCell>
-                  {LEAD_STATUSES.map((status) => (
-                    <TableCell key={status} align="right">
-                      {member.leadCountsByStatus[status] ?? 0}
-                    </TableCell>
-                  ))}
-                  <TableCell align="right">
-                    {member.visitsDueToday > 0 ? (
-                      <Chip label={member.visitsDueToday} size="small" color="warning" />
-                    ) : (
-                      0
-                    )}
-                  </TableCell>
-                  <TableCell align="right">{member.visitsUpcoming}</TableCell>
-                  <TableCell>
-                    {member.lastActivityAt
-                      ? dayjs(member.lastActivityAt).format("DD MMM YYYY, HH:mm")
-                      : "No activity yet"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </Paper>
-  );
-}
-
-const LEADS_REPORT_PAGE_SIZE = 20;
-
-/**
- * The Reports section's filterable Leads table - State/City/Product/Date filters alongside the
- * existing Status filter, all pushed down to GET /leads (extended with stateId/cityId/
- * productId/dateFrom/dateTo - see leadsApi.ts's GetLeadsParams), same owner-scoping rule
- * (ADMIN unrestricted, an entitled manager sees their team) LeadService#list already enforces
- * for every other consumer of that endpoint.
- */
-function FilterableLeadsSection() {
-  const [page, setPage] = useState(0);
-  const [status, setStatus] = useState<LeadStatus | "">("");
-  const [stateId, setStateId] = useState("");
-  const [cityId, setCityId] = useState("");
-  const [productId, setProductId] = useState("");
-  const [dateFrom, setDateFrom] = useState<Dayjs | null>(null);
-  const [dateTo, setDateTo] = useState<Dayjs | null>(null);
+  // The page number belongs to one filter set: changing any filter starts again from page 1.
+  const filterKey = JSON.stringify(leadParams);
+  const [pageState, setPageState] = useState({ key: filterKey, page: 0 });
+  const page = pageState.key === filterKey ? pageState.page : 0;
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
 
-  const { data: states } = useMasterData("STATE");
-  const { data: cities } = useMasterData("CITY");
-  const { data: products } = useMasterData("PRODUCT");
-
-  const filterParams = {
-    status: status || undefined,
-    stateId: stateId || undefined,
-    cityId: cityId || undefined,
-    productId: productId || undefined,
-    dateFrom: dateFrom ? dateFrom.format("YYYY-MM-DD") : undefined,
-    dateTo: dateTo ? dateTo.format("YYYY-MM-DD") : undefined,
-  };
-
-  const { data, isLoading, isError, error } = useLeads({
-    ...filterParams,
-    page,
-    size: LEADS_REPORT_PAGE_SIZE,
-  });
+  const { data, isLoading, isError, error } = useLeads({ ...leadParams, page, size: pageSize });
+  const matrix = useInterestLevelStatusMatrix();
 
   const handleExport = async () => {
     setExportError(null);
     setExportLoading(true);
     try {
-      const all = await getLeads({ ...filterParams, size: 1000 });
+      const all = await getLeads({ ...leadParams, size: 1000 });
       exportToCsv(`leads-${dayjs().format("YYYY-MM-DD")}.csv`, all.content, [
         { label: "Company", value: (l) => l.companyName },
         { label: "Contact Person", value: (l) => l.contactPerson },
@@ -652,706 +387,402 @@ function FilterableLeadsSection() {
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h6">All Leads</Typography>
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<FileDownloadIcon />}
-          onClick={handleExport}
-          disabled={exportLoading || !data || data.totalElements === 0}
-        >
-          {exportLoading ? "Exporting..." : "Export CSV"}
-        </Button>
-      </Stack>
+    <Stack spacing={2}>
+      <DashCard
+        icon={<ListAltIcon />}
+        title="All Leads"
+        action={
+          <ExportButton onClick={handleExport} loading={exportLoading} disabled={!data || data.totalElements === 0} />
+        }
+      >
+        {exportError && (
+          <Alert severity="error" sx={{ mb: 1 }} onClose={() => setExportError(null)}>
+            {exportError}
+          </Alert>
+        )}
+        {isLoading && <SectionLoading />}
+        {isError && <ErrorNote error={error} />}
+        {data && (
+          <>
+            <DataTable
+              rows={data.content}
+              rowKey={(l) => l.id}
+              onRowClick={(l) => navigate(`/app/leads/${l.id}`)}
+              emptyText="No leads match these filters."
+              columns={[
+                { label: "Company", render: (l) => l.companyName },
+                { label: "Contact", render: (l) => l.contactPerson },
+                { label: "Phone", render: (l) => l.contactNo },
+                {
+                  label: "Status",
+                  render: (l) => <Chip size="small" label={LEAD_STATUS_LABELS[l.status]} color={LEAD_STATUS_COLORS[l.status]} />,
+                },
+                { label: "Created", render: (l) => dayjs(l.createdAt).format("DD MMM YYYY") },
+              ]}
+            />
+            <TablePager
+              page={page}
+              totalPages={data.totalPages}
+              totalElements={data.totalElements}
+              pageSize={pageSize}
+              onPageChange={(next) => setPageState({ key: filterKey, page: next })}
+              onPageSizeChange={(n) => {
+                setPageSize(n);
+                setPageState({ key: filterKey, page: 0 });
+              }}
+            />
+          </>
+        )}
+      </DashCard>
 
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2, flexWrap: "wrap" }}>
-        <TextField
-          select
-          label="Status"
-          size="small"
-          sx={{ minWidth: 160 }}
-          value={status}
-          onChange={(e) => {
-            setPage(0);
-            setStatus(e.target.value as LeadStatus | "");
-          }}
-        >
-          <MenuItem value="">All statuses</MenuItem>
-          {LEAD_STATUSES.map((s) => (
-            <MenuItem key={s} value={s}>
-              {LEAD_STATUS_LABELS[s]}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          label="State"
-          size="small"
-          sx={{ minWidth: 160 }}
-          value={stateId}
-          onChange={(e) => {
-            setPage(0);
-            setStateId(e.target.value);
-          }}
-        >
-          <MenuItem value="">All states</MenuItem>
-          {(states ?? []).map((s) => (
-            <MenuItem key={s.id} value={s.id}>
-              {s.label}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          label="City"
-          size="small"
-          sx={{ minWidth: 160 }}
-          value={cityId}
-          onChange={(e) => {
-            setPage(0);
-            setCityId(e.target.value);
-          }}
-        >
-          <MenuItem value="">All cities</MenuItem>
-          {(cities ?? []).map((c) => (
-            <MenuItem key={c.id} value={c.id}>
-              {c.label}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          label="Product"
-          size="small"
-          sx={{ minWidth: 160 }}
-          value={productId}
-          onChange={(e) => {
-            setPage(0);
-            setProductId(e.target.value);
-          }}
-        >
-          <MenuItem value="">All products</MenuItem>
-          {(products ?? []).map((p) => (
-            <MenuItem key={p.id} value={p.id}>
-              {p.label}
-            </MenuItem>
-          ))}
-        </TextField>
-
-        <DatePicker
-          label="Created from"
-          value={dateFrom}
-          onChange={(value) => {
-            setPage(0);
-            setDateFrom(value);
-          }}
-          slotProps={{ textField: { size: "small" } }}
-        />
-        <DatePicker
-          label="Created to"
-          value={dateTo}
-          onChange={(value) => {
-            setPage(0);
-            setDateTo(value);
-          }}
-          slotProps={{ textField: { size: "small" } }}
-        />
-      </Stack>
-
-      {exportError && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setExportError(null)}>
-          {exportError}
-        </Alert>
-      )}
-
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && (
-        <>
-          <TableContainer sx={{ overflowX: "auto" }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Company</TableCell>
-                  <TableCell>Contact</TableCell>
-                  <TableCell>Phone</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Created</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.content.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      <Typography color="text.secondary" sx={{ py: 3 }}>
-                        No leads match these filters.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {data.content.map((lead) => (
-                  <TableRow key={lead.id} hover>
-                    <TableCell>{lead.companyName}</TableCell>
-                    <TableCell>{lead.contactPerson}</TableCell>
-                    <TableCell>{lead.contactNo}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={LEAD_STATUS_LABELS[lead.status]}
-                        color={LEAD_STATUS_COLORS[lead.status]}
-                      />
-                    </TableCell>
-                    <TableCell>{dayjs(lead.createdAt).format("DD MMM YYYY")}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
-        </>
-      )}
-    </Paper>
+      <DashCard icon={<GridOnIcon />} color="secondary" title="Interest Level × Status">
+        {matrix.isLoading && <SectionLoading />}
+        {matrix.isError && <ErrorNote error={matrix.error} />}
+        {matrix.data && (
+          <DataTable
+            rows={matrix.data.rows}
+            rowKey={(r) => r.interestLevel}
+            columns={[
+              { label: "Interest level", render: (r) => r.interestLevel },
+              ...LEAD_STATUSES.map((status) => ({
+                label: LEAD_STATUS_LABELS[status],
+                align: "right" as const,
+                render: (r: { byStatus: Record<LeadStatus, number> }) => r.byStatus[status] ?? 0,
+              })),
+              { label: "Total", align: "right", render: (r) => <strong>{r.total}</strong> },
+            ]}
+          />
+        )}
+      </DashCard>
+    </Stack>
   );
 }
 
-/**
- * Reports Dashboard's global-filter-driven block (section 17.5) - one shared filter bar drives
- * a single composite query (useLeadDashboard), which feeds every stat card/chart/table in this
- * section together. Kept as its own top-of-page block rather than folded into the existing
- * per-section-filtered sections below (Pipeline Summary, Conversion Rate, etc.) - those weren't
- * part of the reference design this section implements, so they're left untouched.
- */
-function GlobalLeadDashboardSection() {
-  const [status, setStatus] = useState<LeadStatus | "">("");
-  const [ownerId, setOwnerId] = useState("");
-  const [stateId, setStateId] = useState("");
-  const [cityId, setCityId] = useState("");
-  const [productId, setProductId] = useState("");
-  const [interestLevelId, setInterestLevelId] = useState("");
-  const [businessTypeId, setBusinessTypeId] = useState("");
-  const [nextFollowupDate, setNextFollowupDate] = useState<Dayjs | null>(null);
-  const [expectedCloseDate, setExpectedCloseDate] = useState<Dayjs | null>(null);
-  const [dateFrom, setDateFrom] = useState<Dayjs | null>(null);
-  const [dateTo, setDateTo] = useState<Dayjs | null>(null);
+// ───────────────────────────── Performance ─────────────────────────────
 
-  const { data: employees } = useEmployees({ size: 200 });
-  const { data: states } = useMasterData("STATE");
-  const { data: cities } = useMasterData("CITY");
-  const { data: products } = useMasterData("PRODUCT");
-  const { data: interestLevels } = useMasterData("INTEREST_LEVEL");
-  const { data: businessTypes } = useMasterData("BUSINESS_TYPE");
+function PerformanceTab({ filters }: { filters: ReportFilters }) {
+  const { data, isLoading, isError, error } = useLeadDashboard(filters.params);
+  const pipeline = usePipelineSummary();
 
-  const filters = {
-    status: status || undefined,
-    ownerId: ownerId || undefined,
-    stateId: stateId || undefined,
-    cityId: cityId || undefined,
-    productId: productId || undefined,
-    interestLevelId: interestLevelId || undefined,
-    businessTypeId: businessTypeId || undefined,
-    nextFollowupDate: nextFollowupDate ? nextFollowupDate.format("YYYY-MM-DD") : undefined,
-    expectedCloseDate: expectedCloseDate ? expectedCloseDate.format("YYYY-MM-DD") : undefined,
-    dateFrom: dateFrom ? dateFrom.format("YYYY-MM-DD") : undefined,
-    dateTo: dateTo ? dateTo.format("YYYY-MM-DD") : undefined,
+  const exportOwners = () => {
+    if (!pipeline.data) return;
+    exportToCsv(`per-salesperson-breakdown-${dayjs().format("YYYY-MM-DD")}.csv`, pipeline.data.byOwner, [
+      { label: "Owner", value: (o) => o.ownerName },
+      { label: "Lead Count", value: (o) => o.leadCount },
+      { label: "Closed-Won Count", value: (o) => o.closedWonCount },
+      { label: "Win Rate", value: (o) => (o.leadCount === 0 ? "" : pct((o.closedWonCount / o.leadCount) * 100)) },
+    ]);
   };
 
-  const { data, isLoading, isError, error } = useLeadDashboard(filters);
-  const theme = useTheme();
+  return (
+    <Stack spacing={2}>
+      {isLoading && <SectionLoading />}
+      {isError && <ErrorNote error={error} />}
+      {data && (
+        <>
+          <DashCard icon={<LeaderboardIcon />} title="Employee Performance">
+            <DataTable
+              rows={data.employeePerformance}
+              rowKey={(r) => r.employeeName}
+              columns={[
+                { label: "Employee", render: (r) => r.employeeName },
+                { label: "Total leads", align: "right", render: (r) => r.total },
+                { label: "Hot", align: "right", render: (r) => r.hot },
+                { label: "Follow-up pending", align: "right", render: (r) => r.followUpPending },
+                { label: "Won", align: "right", render: (r) => r.won },
+                { label: "Conv. %", align: "right", render: (r) => pct(r.conversionRatePercent) },
+              ]}
+            />
+          </DashCard>
 
-  const interestPieData = data
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <DashCard icon={<BusinessIcon />} color="info" title="Company Wise">
+                <DataTable
+                  rows={data.companyWiseSummary.slice(0, 50)}
+                  rowKey={(r) => r.company}
+                  columns={[
+                    { label: "Company", render: (r) => r.company },
+                    { label: "Total", align: "right", render: (r) => r.total },
+                    { label: "Hot", align: "right", render: (r) => r.hot },
+                    { label: "Won", align: "right", render: (r) => r.won },
+                    { label: "Lost", align: "right", render: (r) => r.lost },
+                  ]}
+                />
+              </DashCard>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <DashCard icon={<LocationCityIcon />} color="warning" title="City Wise">
+                <DataTable
+                  rows={data.cityWiseSummary.slice(0, 50)}
+                  rowKey={(r) => r.city}
+                  columns={[
+                    { label: "City", render: (r) => r.city },
+                    { label: "Total", align: "right", render: (r) => r.total },
+                    { label: "Hot", align: "right", render: (r) => r.hot },
+                    { label: "Won", align: "right", render: (r) => r.won },
+                  ]}
+                />
+              </DashCard>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <DashCard icon={<InventoryIcon />} color="success" title="Product Performance">
+                <DataTable
+                  rows={data.productPerformance.slice(0, 50)}
+                  rowKey={(r) => r.product}
+                  columns={[
+                    { label: "Product", render: (r) => r.product },
+                    { label: "Total", align: "right", render: (r) => r.total },
+                    { label: "Won", align: "right", render: (r) => r.won },
+                    { label: "Conv. %", align: "right", render: (r) => pct(r.conversionRatePercent) },
+                  ]}
+                />
+              </DashCard>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <DashCard icon={<WhatshotOutlinedIcon />} color="error" title="Interest Level Performance">
+                <DataTable
+                  rows={data.interestLevelPerformance}
+                  rowKey={(r) => r.interestLevel}
+                  columns={[
+                    { label: "Interest level", render: (r) => r.interestLevel },
+                    { label: "Total", align: "right", render: (r) => r.total },
+                    { label: "Won", align: "right", render: (r) => r.won },
+                    { label: "Conv. %", align: "right", render: (r) => pct(r.conversionRatePercent) },
+                  ]}
+                />
+              </DashCard>
+            </Grid>
+          </Grid>
+        </>
+      )}
+
+      <DashCard
+        icon={<FilterAltIcon />}
+        color="secondary"
+        title="Per-Salesperson Breakdown"
+        action={<ExportButton onClick={exportOwners} disabled={!pipeline.data || pipeline.data.byOwner.length === 0} />}
+      >
+        {pipeline.isLoading && <SectionLoading />}
+        {pipeline.isError && <ErrorNote error={pipeline.error} />}
+        {pipeline.data && (
+          <DataTable
+            rows={pipeline.data.byOwner}
+            rowKey={(o) => o.ownerId}
+            columns={[
+              { label: "Owner", render: (o) => o.ownerName },
+              { label: "Leads", align: "right", render: (o) => o.leadCount },
+              { label: "Closed won", align: "right", render: (o) => o.closedWonCount },
+              {
+                label: "Win rate",
+                align: "right",
+                render: (o) => (o.leadCount === 0 ? "—" : pct((o.closedWonCount / o.leadCount) * 100)),
+              },
+            ]}
+          />
+        )}
+      </DashCard>
+      <Typography variant="caption" color="text.secondary">
+        The per-salesperson breakdown covers all leads and ignores the filters above.
+      </Typography>
+    </Stack>
+  );
+}
+
+// ───────────────────────────── Visits ─────────────────────────────
+
+function VisitsTab({ filters }: { filters: ReportFilters }) {
+  const theme = useTheme();
+  const chart = useChartStyles();
+  // Visits follow the page-level period (their own visit date, not lead creation date).
+  const from = filters.params.dateFrom;
+  const to = filters.params.dateTo;
+  const summary = useVisitsCompletedVsMissed(from, to);
+  const byType = useVisitsByType(from, to);
+
+  const statusData = summary.data
     ? [
-        { name: "Hot", value: data.hotLeads, key: "hot" },
-        { name: "Warm", value: data.warmLeads, key: "warm" },
-        { name: "Cold", value: data.coldLeads, key: "cold" },
-        { name: "Not Set", value: data.notSetInterestCount, key: "notset" },
+        { name: "Completed", value: summary.data.completed, color: theme.palette.success.main },
+        { name: "Planned", value: summary.data.planned, color: theme.palette.info.main },
+        { name: "Missed", value: summary.data.missed, color: theme.palette.error.main },
       ]
     : [];
-  const interestPieColors: Record<string, string> = {
-    hot: theme.palette.error.main,
-    warm: theme.palette.warning.main,
-    cold: theme.palette.info.main,
-    notset: theme.palette.grey[500],
-  };
+  const typeSlices: DonutSlice[] = byType.data
+    ? [
+        { label: "Field", value: byType.data.byType.FIELD ?? 0, color: theme.palette.primary.main },
+        { label: "Telephonic", value: byType.data.byType.TELEPHONIC ?? 0, color: theme.palette.secondary.main },
+      ]
+    : [];
 
   return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Global Filters (All Reports)
-      </Typography>
-
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+    <Stack spacing={2}>
+      <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            select
-            label="Employee"
-            size="small"
-            fullWidth
-            value={ownerId}
-            onChange={(e) => setOwnerId(e.target.value)}
-          >
-            <MenuItem value="">All</MenuItem>
-            {(employees?.content ?? []).map((e) => (
-              <MenuItem key={e.id} value={e.id}>
-                {e.fullName}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            select
-            label="State"
-            size="small"
-            fullWidth
-            value={stateId}
-            onChange={(e) => setStateId(e.target.value)}
-          >
-            <MenuItem value="">All</MenuItem>
-            {(states ?? []).map((s) => (
-              <MenuItem key={s.id} value={s.id}>
-                {s.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            select
-            label="City"
-            size="small"
-            fullWidth
-            value={cityId}
-            onChange={(e) => setCityId(e.target.value)}
-          >
-            <MenuItem value="">All</MenuItem>
-            {(cities ?? []).map((c) => (
-              <MenuItem key={c.id} value={c.id}>
-                {c.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            select
-            label="Product"
-            size="small"
-            fullWidth
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-          >
-            <MenuItem value="">All</MenuItem>
-            {(products ?? []).map((p) => (
-              <MenuItem key={p.id} value={p.id}>
-                {p.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            select
-            label="Interest Level"
-            size="small"
-            fullWidth
-            value={interestLevelId}
-            onChange={(e) => setInterestLevelId(e.target.value)}
-          >
-            <MenuItem value="">All</MenuItem>
-            {(interestLevels ?? []).map((i) => (
-              <MenuItem key={i.id} value={i.id}>
-                {i.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            select
-            label="Business Type"
-            size="small"
-            fullWidth
-            value={businessTypeId}
-            onChange={(e) => setBusinessTypeId(e.target.value)}
-          >
-            <MenuItem value="">All</MenuItem>
-            {(businessTypes ?? []).map((b) => (
-              <MenuItem key={b.id} value={b.id}>
-                {b.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            select
-            label="Status"
-            size="small"
-            fullWidth
-            value={status}
-            onChange={(e) => setStatus(e.target.value as LeadStatus | "")}
-          >
-            <MenuItem value="">All</MenuItem>
-            {LEAD_STATUSES.map((s) => (
-              <MenuItem key={s} value={s}>
-                {LEAD_STATUS_LABELS[s]}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <DatePicker
-            label="Next Follow-up Date"
-            value={nextFollowupDate}
-            onChange={setNextFollowupDate}
-            slotProps={{ textField: { fullWidth: true, size: "small" } }}
+          <KpiCard
+            label="Completion"
+            value={summary.data ? pct(summary.data.completionRatePercent) : "…"}
+            caption="Completed visits"
+            icon={<EventAvailableIcon />}
+            color="success"
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <DatePicker
-            label="Expected Date of Close"
-            value={expectedCloseDate}
-            onChange={setExpectedCloseDate}
-            slotProps={{ textField: { fullWidth: true, size: "small" } }}
-          />
+          <KpiCard label="Completed" value={summary.data?.completed ?? "…"} caption="Done" icon={<EventAvailableIcon />} color="success" />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <DatePicker
-            label="Created From"
-            value={dateFrom}
-            onChange={setDateFrom}
-            slotProps={{ textField: { fullWidth: true, size: "small" } }}
-          />
+          <KpiCard label="Planned" value={summary.data?.planned ?? "…"} caption="Upcoming" icon={<TodayIcon />} color="info" />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <DatePicker
-            label="Created To"
-            value={dateTo}
-            onChange={setDateTo}
-            slotProps={{ textField: { fullWidth: true, size: "small" } }}
-          />
+          <KpiCard label="Missed" value={summary.data?.missed ?? "…"} caption="Not done" icon={<EventBusyIcon />} color="error" />
         </Grid>
       </Grid>
 
-      {isLoading && <SectionLoading />}
-      {isError && <Alert severity="error">{parseApiError(error).message}</Alert>}
-
-      {data && (
-        <>
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<GroupsIcon />} color="primary" value={data.totalLeads} label="Total Leads" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<LocalFireDepartmentIcon />} color="error" value={data.hotLeads} label="Hot Leads" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<WhatshotIcon />} color="warning" value={data.warmLeads} label="Warm Leads" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<AcUnitIcon />} color="info" value={data.coldLeads} label="Cold Leads" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<EventAvailableIcon />} color="primary" value={data.todayFollowUpCount} label="Today's Follow-up" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<EventBusyIcon />} color="error" value={data.overdueFollowUpCount} label="Overdue Follow-up" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<EmojiEventsIcon />} color="success" value={data.closedWonCount} label="Closed Won" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard icon={<CancelIcon />} color="error" value={data.closedLostCount} label="Closed Lost" />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard
-                icon={<TrendingUpIcon />}
-                color="success"
-                value={`${data.conversionRatePercent.toFixed(2)}%`}
-                label="Conversion Rate"
-              />
-            </Grid>
-            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-              <StatCard
-                icon={<EventAvailableIcon />}
-                color="secondary"
-                value={data.expectedClosures.thisMonth}
-                label="Expected Closures (Month)"
-              />
-            </Grid>
-          </Grid>
-
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Leads by Interest Level
-              </Typography>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={interestPieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    label={({ name, value }) => (value > 0 ? `${name}: ${value}` : "")}
-                  >
-                    {interestPieData.map((entry) => (
-                      <Cell key={entry.key} fill={interestPieColors[entry.key]} />
-                    ))}
-                  </Pie>
-                  <Legend />
-                  <RechartsTooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Leads by Business Type
-              </Typography>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={data.byBusinessType} layout="vertical" margin={{ left: 24 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="label" width={110} />
-                  <RechartsTooltip />
-                  <Bar dataKey="count" name="Leads" fill={theme.palette.primary.main} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Grid>
-          </Grid>
-
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Company Wise Summary
-              </Typography>
-              <TableContainer sx={{ maxHeight: 300 }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Company</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right">Hot</TableCell>
-                      <TableCell align="right">Won</TableCell>
-                      <TableCell align="right">Lost</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {data.companyWiseSummary.slice(0, 25).map((row) => (
-                      <TableRow key={row.company} hover>
-                        <TableCell>{row.company}</TableCell>
-                        <TableCell align="right">{row.total}</TableCell>
-                        <TableCell align="right">{row.hot}</TableCell>
-                        <TableCell align="right">{row.won}</TableCell>
-                        <TableCell align="right">{row.lost}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                City Wise Summary
-              </Typography>
-              <TableContainer sx={{ maxHeight: 300 }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>City</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right">Hot</TableCell>
-                      <TableCell align="right">Won</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {data.cityWiseSummary.slice(0, 25).map((row) => (
-                      <TableRow key={row.city} hover>
-                        <TableCell>{row.city}</TableCell>
-                        <TableCell align="right">{row.total}</TableCell>
-                        <TableCell align="right">{row.hot}</TableCell>
-                        <TableCell align="right">{row.won}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Grid>
-          </Grid>
-
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Product Performance
-              </Typography>
-              <TableContainer sx={{ maxHeight: 300 }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Product</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right">Won</TableCell>
-                      <TableCell align="right">Conv. %</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {data.productPerformance.slice(0, 25).map((row) => (
-                      <TableRow key={row.product} hover>
-                        <TableCell>{row.product}</TableCell>
-                        <TableCell align="right">{row.total}</TableCell>
-                        <TableCell align="right">{row.won}</TableCell>
-                        <TableCell align="right">{row.conversionRatePercent.toFixed(2)}%</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Interest Level Performance
-              </Typography>
-              <TableContainer sx={{ maxHeight: 300 }}>
-                <Table size="small" stickyHeader>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Interest Level</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right">Won</TableCell>
-                      <TableCell align="right">Conv. %</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {data.interestLevelPerformance.map((row) => (
-                      <TableRow key={row.interestLevel} hover>
-                        <TableCell>{row.interestLevel}</TableCell>
-                        <TableCell align="right">{row.total}</TableCell>
-                        <TableCell align="right">{row.won}</TableCell>
-                        <TableCell align="right">{row.conversionRatePercent.toFixed(2)}%</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Follow-up Summary
-              </Typography>
-              <Stack spacing={0.5}>
-                <Typography variant="body2">Today: {data.followUpSummary.todayCount}</Typography>
-                <Typography variant="body2">Tomorrow: {data.followUpSummary.tomorrowCount}</Typography>
-                <Typography variant="body2">Upcoming (Next 7 Days): {data.followUpSummary.next7DaysCount}</Typography>
-                <Typography variant="body2" color="error.main">
-                  Overdue Follow-ups: {data.followUpSummary.overdueCount}
-                </Typography>
-                <Typography variant="body2">No Follow-up Assigned: {data.followUpSummary.unassignedCount}</Typography>
-              </Stack>
-              <Typography variant="subtitle1" sx={{ mt: 3 }} gutterBottom>
-                Expected Closures
-              </Typography>
-              <Stack spacing={0.5}>
-                <Typography variant="body2">This Week: {data.expectedClosures.thisWeek}</Typography>
-                <Typography variant="body2">This Month: {data.expectedClosures.thisMonth}</Typography>
-                <Typography variant="body2">Next Month: {data.expectedClosures.nextMonth}</Typography>
-              </Stack>
-            </Grid>
-          </Grid>
-
-          <Typography variant="subtitle1" gutterBottom>
-            Employee Performance
-          </Typography>
-          <TableContainer sx={{ overflowX: "auto" }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Employee</TableCell>
-                  <TableCell align="right">Total Leads</TableCell>
-                  <TableCell align="right">Hot</TableCell>
-                  <TableCell align="right">Follow-up Pending</TableCell>
-                  <TableCell align="right">Won</TableCell>
-                  <TableCell align="right">Conv. %</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.employeePerformance.map((row) => (
-                  <TableRow key={row.employeeName} hover>
-                    <TableCell>{row.employeeName}</TableCell>
-                    <TableCell align="right">{row.total}</TableCell>
-                    <TableCell align="right">{row.hot}</TableCell>
-                    <TableCell align="right">{row.followUpPending}</TableCell>
-                    <TableCell align="right">{row.won}</TableCell>
-                    <TableCell align="right">{row.conversionRatePercent.toFixed(2)}%</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </>
-      )}
-    </Paper>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 7 }}>
+          <DashCard icon={<EventAvailableIcon />} color="success" title="Completed vs Missed">
+            {summary.isLoading && <SectionLoading />}
+            {summary.isError && <ErrorNote error={summary.error} />}
+            {summary.data && (
+              <Box sx={{ height: CHART_HEIGHT + 20 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={statusData} margin={{ left: -16, right: 8, top: 8, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke={chart.grid} strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: chart.axis }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: chart.axis }} axisLine={false} tickLine={false} />
+                    <RechartsTooltip {...chart.tooltip} />
+                    <Bar dataKey="value" name="Visits" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                      {statusData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            )}
+          </DashCard>
+        </Grid>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <DashCard icon={<PlaceIcon />} color="info" title="Visits by Type">
+            {byType.isLoading && <SectionLoading />}
+            {byType.isError && <ErrorNote error={byType.error} />}
+            {byType.data && byType.data.total === 0 && <EmptyNote>No visits yet.</EmptyNote>}
+            {byType.data && byType.data.total > 0 && (
+              <Box sx={{ minHeight: CHART_HEIGHT, display: "flex" }}>
+                <DonutWithLegend slices={typeSlices} centerValue={byType.data.total} centerLabel="VISITS" />
+              </Box>
+            )}
+          </DashCard>
+        </Grid>
+      </Grid>
+    </Stack>
   );
 }
 
+// ───────────────────────────── Team ─────────────────────────────
+
+function TeamTab() {
+  const navigate = useNavigate();
+  const { data, isLoading, isError, error } = useTeamProgress();
+
+  const handleExport = () => {
+    if (!data) return;
+    exportToCsv(`team-progress-${dayjs().format("YYYY-MM-DD")}.csv`, data.members, [
+      { label: "Team Member", value: (m) => m.employeeName },
+      { label: "Total Leads", value: (m) => m.totalLeads },
+      ...LEAD_STATUSES.map((status) => ({
+        label: LEAD_STATUS_LABELS[status],
+        value: (m: TeamMemberProgress) => m.leadCountsByStatus[status] ?? 0,
+      })),
+      { label: "Visits Due Today", value: (m) => m.visitsDueToday },
+      { label: "Visits Upcoming (7d)", value: (m) => m.visitsUpcoming },
+      { label: "Last Activity", value: (m) => (m.lastActivityAt ? dayjs(m.lastActivityAt).format("YYYY-MM-DD HH:mm") : "") },
+    ]);
+  };
+
+  return (
+    <DashCard
+      icon={<GroupWorkIcon />}
+      title="Team Progress"
+      action={<ExportButton onClick={handleExport} disabled={!data || data.members.length === 0} />}
+    >
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        Each team member's lead pipeline, upcoming visits and last activity. Click a row for details.
+      </Typography>
+      {isLoading && <SectionLoading />}
+      {isError && <ErrorNote error={error} />}
+      {data && (
+        <DataTable
+          rows={data.members}
+          rowKey={(m) => m.employeeId}
+          onRowClick={(m) => navigate(`/app/team/${m.employeeId}`)}
+          emptyText="No team members to show yet."
+          columns={[
+            { label: "Team member", render: (m) => <><PersonIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: "-2px", color: "text.secondary" }} />{m.employeeName}</> },
+            { label: "Total", align: "right", render: (m) => <strong>{m.totalLeads}</strong> },
+            ...LEAD_STATUSES.map((status) => ({
+              label: LEAD_STATUS_LABELS[status],
+              align: "right" as const,
+              render: (m: TeamMemberProgress) => m.leadCountsByStatus[status] ?? 0,
+            })),
+            {
+              label: "Due today",
+              align: "right",
+              render: (m) => (m.visitsDueToday > 0 ? <Chip label={m.visitsDueToday} size="small" color="warning" /> : 0),
+            },
+            { label: "Upcoming (7d)", align: "right", render: (m) => m.visitsUpcoming },
+            {
+              label: "Last activity",
+              render: (m) => (m.lastActivityAt ? dayjs(m.lastActivityAt).format("DD MMM YYYY, HH:mm") : "No activity yet"),
+            },
+          ]}
+        />
+      )}
+    </DashCard>
+  );
+}
+
+// ───────────────────────────── Page ─────────────────────────────
+
 /**
- * Admin-only reports/dashboard page (Phase 5): pipeline summary, conversion rate,
- * and visit completion charts, plus a per-salesperson breakdown table. Each section
- * fetches and loads independently so a slow/failing endpoint doesn't block the rest
- * of the page.
+ * Reports, split into five sub-sections (Overview, Leads, Performance, Visits, Team) so the page
+ * is short and easy to navigate. One search-style filter bar drives the lead-based tabs; the
+ * selected tab is kept in the URL (?tab=) so a section can be bookmarked or shared.
  */
 export function ReportsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get("tab");
+  const tab: TabId = TABS.some((t) => t.id === requested) ? (requested as TabId) : "overview";
+  const filters = useReportFilters();
+  const filtered = tab === "overview" || tab === "leads" || tab === "performance";
+  const dated = tab !== "team";
+
   return (
     <Box>
-      <Typography variant="h5" sx={{ mb: 3 }}>
-        Reports &amp; Dashboard
+      <Typography variant="h5" sx={{ mb: 2 }}>
+        Reports
       </Typography>
 
-      <Grid container spacing={3}>
-        <Grid size={12}>
-          <GlobalLeadDashboardSection />
-        </Grid>
-        <Grid size={{ xs: 12, md: 7 }}>
-          <PipelineSummarySection />
-        </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
-          <ConversionRateSection />
-        </Grid>
-        <Grid size={12}>
-          <TeamProgressSection />
-        </Grid>
-        <Grid size={12}>
-          <VisitsCompletedVsMissedSection />
-        </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
-          <VisitsByTypeSection />
-        </Grid>
-        <Grid size={{ xs: 12, md: 7 }}>
-          <InterestLevelStatusMatrixSection />
-        </Grid>
-        <Grid size={12}>
-          <OwnerBreakdownSection />
-        </Grid>
-        <Grid size={12}>
-          <FilterableLeadsSection />
-        </Grid>
-      </Grid>
+      <Paper variant="outlined" sx={{ borderRadius: 3, mb: 2, px: 1 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, next: TabId) => setSearchParams(next === "overview" ? {} : { tab: next }, { replace: true })}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          {TABS.map((t) => (
+            <Tab key={t.id} value={t.id} label={t.label} sx={{ textTransform: "none", minHeight: 44 }} />
+          ))}
+        </Tabs>
+      </Paper>
+
+      {dated && <ReportPeriodBar filters={filters} />}
+      {filtered && <ReportFilterBar filters={filters} scope={tab === "leads" ? "leads" : "all"} />}
+
+      {tab === "overview" && <OverviewTab filters={filters} />}
+      {tab === "leads" && <LeadsTab filters={filters} />}
+      {tab === "performance" && <PerformanceTab filters={filters} />}
+      {tab === "visits" && <VisitsTab filters={filters} />}
+      {tab === "team" && <TeamTab />}
     </Box>
   );
 }

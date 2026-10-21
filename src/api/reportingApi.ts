@@ -235,6 +235,7 @@ export interface GetLeadDashboardParams {
   cityId?: string;
   productId?: string;
   businessTypeId?: string;
+  interestReasonId?: string;
   nextFollowupDate?: string;
   expectedCloseDate?: string;
   dateFrom?: string;
@@ -346,5 +347,35 @@ export function useTeamProgress() {
   return useQuery({
     queryKey: ["reports", "team-progress"],
     queryFn: () => getTeamProgress(),
+  });
+}
+
+/** One row of the "why is it Hot/Warm/Cold" report: leads at an interest level carrying a reason
+ * (a lead with several reasons counts once under each). */
+export interface InterestReasonRow {
+  interestLevel: string;
+  reason: string;
+  count: number;
+}
+
+export interface InterestReasonReport {
+  rows: InterestReasonRow[];
+  leadsWithReasons: number;
+}
+
+export interface GetInterestReasonParams {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export async function getInterestReasons(params: GetInterestReasonParams = {}): Promise<InterestReasonReport> {
+  const response = await axiosInstance.get<InterestReasonReport>("/reports/interest-reasons", { params });
+  return response.data;
+}
+
+export function useInterestReasons(params: GetInterestReasonParams = {}) {
+  return useQuery({
+    queryKey: ["reports", "interest-reasons", params],
+    queryFn: () => getInterestReasons(params),
   });
 }

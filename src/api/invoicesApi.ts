@@ -6,11 +6,13 @@ import {
 import { axiosInstance } from "./axiosInstance";
 import type { PagedResponse } from "./employeesApi";
 
-export type InvoiceStatus = "UNPAID" | "PAID";
+export type InvoiceStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
 
 export interface InvoiceLineItem {
   id: string;
   productId: string | null;
+  /** The purchase-order line this line bills, when the invoice came from a PO. */
+  poLineId?: string | null;
   hsnSac: string | null;
   description: string;
   quantity: number;
@@ -19,9 +21,11 @@ export interface InvoiceLineItem {
   taxRatePercent: number;
   lineSubtotal: number;
   lineDiscountAmount: number;
+  lineTaxableAmount?: number;
   lineTaxAmount: number;
   lineCgstAmount: number;
   lineSgstAmount: number;
+  lineIgstAmount?: number;
   sortOrder: number;
 }
 
@@ -44,10 +48,22 @@ export interface Invoice {
   invoiceDate: string;
   dueDate: string | null;
   placeOfSupply: string | null;
+  placeOfSupplyStateId?: string | null;
   reverseCharge: boolean;
   quotationId: string | null;
+  /** Set when this invoice bills a customer purchase order. */
+  poId?: string | null;
+  poNumber?: string | null;
+  poDate?: string | null;
+  poOverrideReason?: string | null;
   subtotal: number;
+  discountTotal?: number;
+  taxableAmount?: number;
+  cgstTotal?: number;
+  sgstTotal?: number;
+  igstTotal?: number;
   taxTotal: number;
+  roundOff?: number;
   grandTotal: number;
   status: InvoiceStatus;
   notes: string | null;
@@ -73,6 +89,9 @@ export interface InvoiceLineItemPayload {
   unitPrice?: number;
   discountPercent?: number;
   taxRatePercent?: number;
+  unit?: string;
+  /** On a purchase-order invoice: the PO line being billed (price/tax come from the PO). */
+  poLineId?: string;
 }
 
 export interface CreateInvoicePayload {
@@ -89,9 +108,18 @@ export interface CreateInvoicePayload {
   invoiceDate: string;
   dueDate?: string;
   placeOfSupply?: string;
+  /** STATE master-data id; compared with the billing profile's stateId to pick IGST vs CGST+SGST. */
+  placeOfSupplyStateId?: string;
   reverseCharge?: boolean;
   lineItems: InvoiceLineItemPayload[];
   notes?: string;
+  /** Bills this purchase order; every line then needs a poLineId. */
+  poId?: string;
+  /** Without a poId: the customer's PO reference, typed in. */
+  poNumber?: string;
+  poDate?: string;
+  /** ADMIN only: required to bill past a PO line's remaining quantity. */
+  overBillingReason?: string;
 }
 
 export async function getInvoices(
@@ -185,6 +213,7 @@ export function useCreateInvoice() {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       // A catalog line deducts stock - the Products list should reflect it immediately.
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["purchaseOrders"] });
     },
   });
 }

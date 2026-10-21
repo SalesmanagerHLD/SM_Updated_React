@@ -50,6 +50,8 @@ export interface Lead {
   productIds: string[];
   productsOther: string | null;
   interestLevelId: string | null;
+  /** Why the lead has this interest level (INTEREST_REASON master ids under interestLevelId). */
+  interestReasonIds: string[];
   interestLevelOther: string | null;
   currentProductSolution: string | null;
   budgetRange: string | null;
@@ -82,6 +84,7 @@ export interface GetLeadsParams {
   stateId?: string;
   cityId?: string;
   productId?: string;
+  interestReasonId?: string;
   dateFrom?: string;
   dateTo?: string;
   page?: number;
@@ -113,6 +116,8 @@ export interface LeadPayloadFields {
   productIds?: string[];
   productsOther?: string;
   interestLevelId?: string;
+  /** null/omitted = unchanged on update; [] clears. */
+  interestReasonIds?: string[];
   interestLevelOther?: string;
   currentProductSolution?: string;
   budgetRange?: string;

@@ -9,7 +9,11 @@ export type ActivityType =
   | "VISIT_LOGGED"
   | "VISIT_COMPLETED"
   | "VISIT_MISSED"
-  | "LEAD_LAPSED";
+  | "LEAD_LAPSED"
+  | "PO_RECEIVED"
+  | "PO_ACCEPTED"
+  | "PO_BILLED"
+  | "PO_CANCELLED";
 
 export const ACTIVITY_TYPES: ActivityType[] = [
   "LEAD_CREATED",
@@ -19,6 +23,10 @@ export const ACTIVITY_TYPES: ActivityType[] = [
   "VISIT_COMPLETED",
   "VISIT_MISSED",
   "LEAD_LAPSED",
+  "PO_RECEIVED",
+  "PO_ACCEPTED",
+  "PO_BILLED",
+  "PO_CANCELLED",
 ];
 
 export interface ActivityEntry {

@@ -8,6 +8,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Link,
   Paper,
   Stack,
   Table,
@@ -29,9 +30,11 @@ import {
 } from "../../api/invoicesApi";
 import { parseApiError } from "../../api/errorHelpers";
 
-const STATUS_COLORS: Record<InvoiceStatus, "success" | "warning"> = {
+const STATUS_COLORS: Record<InvoiceStatus, "success" | "warning" | "info" | "error"> = {
   PAID: "success",
   UNPAID: "warning",
+  PARTIALLY_PAID: "info",
+  CANCELLED: "error",
 };
 
 export function InvoiceDetailPage() {
@@ -59,6 +62,8 @@ export function InvoiceDetailPage() {
       </Alert>
     );
   }
+
+  const isIgst = (invoice.igstTotal ?? 0) > 0;
 
   const toggleStatus = () => {
     const nextStatus: InvoiceStatus = invoice.status === "PAID" ? "UNPAID" : "PAID";
@@ -179,6 +184,25 @@ export function InvoiceDetailPage() {
           {invoice.placeOfSupply && (
             <Typography color="text.secondary">Place of Supply: {invoice.placeOfSupply}</Typography>
           )}
+          {invoice.poNumber && (
+            <Typography color="text.secondary">
+              Customer PO:{" "}
+              {invoice.poId ? (
+                <Link component="button" variant="body1" sx={{ verticalAlign: "baseline" }}
+                  onClick={() => navigate(`/app/purchase-orders/${invoice.poId}`)}>
+                  {invoice.poNumber}
+                </Link>
+              ) : (
+                invoice.poNumber
+              )}
+              {invoice.poDate ? ` · ${dayjs(invoice.poDate).format("DD MMM YYYY")}` : ""}
+            </Typography>
+          )}
+          {invoice.poOverrideReason && (
+            <Typography color="warning.main" variant="body2">
+              Billed past the PO quantity (admin override): {invoice.poOverrideReason}
+            </Typography>
+          )}
           <Typography color="text.secondary">Reverse Charge: {invoice.reverseCharge ? "Yes" : "No"}</Typography>
         </Paper>
       </Stack>
@@ -192,8 +216,14 @@ export function InvoiceDetailPage() {
               <TableCell align="right">Qty</TableCell>
               <TableCell align="right">Unit Price</TableCell>
               <TableCell align="right">Discount %</TableCell>
-              <TableCell align="right">CGST</TableCell>
-              <TableCell align="right">SGST</TableCell>
+              {isIgst ? (
+                <TableCell align="right">IGST</TableCell>
+              ) : (
+                <>
+                  <TableCell align="right">CGST</TableCell>
+                  <TableCell align="right">SGST</TableCell>
+                </>
+              )}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -204,8 +234,14 @@ export function InvoiceDetailPage() {
                 <TableCell align="right">{line.quantity}</TableCell>
                 <TableCell align="right">{line.unitPrice}</TableCell>
                 <TableCell align="right">{line.discountPercent}</TableCell>
-                <TableCell align="right">{line.lineCgstAmount}</TableCell>
-                <TableCell align="right">{line.lineSgstAmount}</TableCell>
+                {isIgst ? (
+                  <TableCell align="right">{line.lineIgstAmount}</TableCell>
+                ) : (
+                  <>
+                    <TableCell align="right">{line.lineCgstAmount}</TableCell>
+                    <TableCell align="right">{line.lineSgstAmount}</TableCell>
+                  </>
+                )}
               </TableRow>
             ))}
           </TableBody>
@@ -213,7 +249,22 @@ export function InvoiceDetailPage() {
         <Divider sx={{ my: 2 }} />
         <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
           <Typography variant="body2">Subtotal: {invoice.subtotal}</Typography>
-          <Typography variant="body2">Tax: {invoice.taxTotal}</Typography>
+          {invoice.taxableAmount != null && (
+            <Typography variant="body2">Taxable Amount: {invoice.taxableAmount}</Typography>
+          )}
+          {isIgst ? (
+            <Typography variant="body2">IGST: {invoice.igstTotal}</Typography>
+          ) : invoice.cgstTotal != null ? (
+            <>
+              <Typography variant="body2">CGST: {invoice.cgstTotal}</Typography>
+              <Typography variant="body2">SGST: {invoice.sgstTotal}</Typography>
+            </>
+          ) : (
+            <Typography variant="body2">Tax: {invoice.taxTotal}</Typography>
+          )}
+          {invoice.roundOff != null && invoice.roundOff !== 0 && (
+            <Typography variant="body2">Round off: {invoice.roundOff}</Typography>
+          )}
           <Typography variant="subtitle1">Grand Total: {invoice.grandTotal}</Typography>
         </Stack>
       </Paper>

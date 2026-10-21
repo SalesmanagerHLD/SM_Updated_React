@@ -20,6 +20,8 @@ export interface ParsedApiError {
   message: string;
   fieldErrors: ApiFieldError[];
   status?: number;
+  /** The backend's `error` field, e.g. "OVER_BILLING_OVERRIDE_REQUIRED" for purchase-order over-billing. */
+  code?: string;
 }
 
 const FALLBACK_MESSAGE = "Something went wrong. Please try again.";
@@ -36,6 +38,7 @@ export function parseApiError(error: unknown): ParsedApiError {
       message: body?.message ?? error.message ?? FALLBACK_MESSAGE,
       fieldErrors: body?.fieldErrors ?? [],
       status: error.response?.status,
+      code: body?.error,
     };
   }
 

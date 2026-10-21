@@ -48,16 +48,20 @@ import type { ActivityType } from "../../api/activityApi";
 import { ACTIVITY_TYPES, useActivity } from "../../api/activityApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { CreatableMasterAutocomplete } from "../../components/CreatableMasterAutocomplete";
+import { InterestReasonsField } from "../../components/InterestReasonsField";
 import { LEAD_STATUS_COLORS, LEAD_STATUS_LABELS } from "./leadStatusConfig";
 import { LeadAttachmentsSection } from "./LeadAttachmentsSection";
+import { LeadPurchaseOrdersSection } from "../purchaseorders/LeadPurchaseOrdersSection";
+import { useEntitlements } from "../../entitlement/EntitlementContext";
 import { LeadLostReasonDialog } from "./LeadLostReasonDialog";
 import { ReassignLeadDialog } from "./ReassignLeadDialog";
 import { VisitFormDialog } from "../visits/VisitFormDialog";
 import {
-  ACTIVITY_TYPE_COLORS,
-  ACTIVITY_TYPE_ICONS,
   ACTIVITY_TYPE_LABELS,
   resolveActorName,
+  activityIcon,
+  activityColor,
+  activityLabel,
 } from "../activity/activityConfig";
 
 const editSchema = z.object({
@@ -84,6 +88,7 @@ const editSchema = z.object({
   productIds: z.array(z.string()),
   interestLevelId: z.string().nullable(),
   interestLevelOther: z.string().nullable(),
+  interestReasonIds: z.array(z.string()),
   currentProductSolution: z.string(),
   budgetRange: z.string(),
   decisionMakerIdentified: z.boolean(),
@@ -135,6 +140,7 @@ const emptyValues: EditFormValues = {
   productIds: [],
   interestLevelId: null,
   interestLevelOther: null,
+  interestReasonIds: [],
   currentProductSolution: "",
   budgetRange: "",
   decisionMakerIdentified: false,
@@ -153,6 +159,7 @@ export function LeadDetailPage() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const isAdmin = role === "ADMIN";
+  const { hasEntitlement } = useEntitlements();
 
   const { data: lead, isLoading, isError, error } = useLead(id);
   const updateMutation = useUpdateLead();
@@ -263,6 +270,7 @@ export function LeadDetailPage() {
       productIds: lead.productIds ?? [],
       interestLevelId: lead.interestLevelId,
       interestLevelOther: lead.interestLevelOther,
+      interestReasonIds: lead.interestReasonIds ?? [],
       currentProductSolution: lead.currentProductSolution ?? "",
       budgetRange: lead.budgetRange ?? "",
       decisionMakerIdentified: lead.decisionMakerIdentified ?? false,
@@ -323,6 +331,7 @@ export function LeadDetailPage() {
       productIds: values.productIds,
       interestLevelId: values.interestLevelId ?? undefined,
       interestLevelOther: values.interestLevelOther ?? undefined,
+      interestReasonIds: values.interestReasonIds,
       currentProductSolution: values.currentProductSolution.trim() || undefined,
       budgetRange: values.budgetRange.trim() || undefined,
       decisionMakerIdentified: values.decisionMakerIdentified,
@@ -667,6 +676,19 @@ export function LeadDetailPage() {
               )}
             />
           </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <Controller
+              control={form.control}
+              name="interestReasonIds"
+              render={({ field }) => (
+                <InterestReasonsField
+                  interestLevelId={form.watch("interestLevelId")}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </Grid>
           <Grid size={{ xs: 12, sm: 6 }} sx={{ display: "flex", alignItems: "center" }}>
             <Controller
               control={form.control}
@@ -962,7 +984,7 @@ export function LeadDetailPage() {
         {!activityLoading && (activityPage?.content.length ?? 0) > 0 && (
           <Stack spacing={0}>
             {activityPage!.content.map((entry, index) => {
-              const Icon = ACTIVITY_TYPE_ICONS[entry.type];
+              const Icon = activityIcon(entry.type);
               const isLast = index === activityPage!.content.length - 1;
               return (
                 <Stack key={entry.id} direction="row" spacing={2}>
@@ -975,8 +997,8 @@ export function LeadDetailPage() {
                         width: 32,
                         height: 32,
                         borderRadius: "50%",
-                        bgcolor: `${ACTIVITY_TYPE_COLORS[entry.type]}.main`,
-                        color: `${ACTIVITY_TYPE_COLORS[entry.type]}.contrastText`,
+                        bgcolor: `${activityColor(entry.type)}.main`,
+                        color: `${activityColor(entry.type)}.contrastText`,
                         flexShrink: 0,
                       }}
                     >
@@ -1000,7 +1022,7 @@ export function LeadDetailPage() {
                       sx={{ alignItems: "center", mb: 0.25 }}
                     >
                       <Typography variant="subtitle2">
-                        {ACTIVITY_TYPE_LABELS[entry.type]}
+                        {activityLabel(entry.type)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {dayjs(entry.createdAt).format("DD MMM YYYY, HH:mm")}
@@ -1021,6 +1043,8 @@ export function LeadDetailPage() {
       </Paper>
       </Grid>
       </Grid>
+
+      {hasEntitlement("INVOICING") && <LeadPurchaseOrdersSection leadId={lead.id} />}
 
       <LeadLostReasonDialog
         open={lostDialogOpen}

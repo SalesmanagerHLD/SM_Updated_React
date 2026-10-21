@@ -34,10 +34,13 @@ import { ProductListPage } from "../features/inventory/ProductListPage";
 import { InvoiceDashboardPage } from "../features/invoicing/InvoiceDashboardPage";
 import { InvoiceFormPage } from "../features/invoicing/InvoiceFormPage";
 import { InvoiceDetailPage } from "../features/invoicing/InvoiceDetailPage";
+import { InvoiceDesignPage } from "../features/invoicing/InvoiceDesignPage";
 import { CustomerListPage } from "../features/customers/CustomerListPage";
 import { QuotationListPage } from "../features/quotations/QuotationListPage";
 import { QuotationFormPage } from "../features/quotations/QuotationFormPage";
 import { QuotationDetailPage } from "../features/quotations/QuotationDetailPage";
+import { PurchaseOrderListPage } from "../features/purchaseorders/PurchaseOrderListPage";
+import { PurchaseOrderDetailPage } from "../features/purchaseorders/PurchaseOrderDetailPage";
 
 export function AppRoutes() {
   return (
@@ -98,8 +101,14 @@ export function AppRoutes() {
           </Route>
 
           <Route element={<RequireEntitlementRoute feature="INVENTORY_MANAGEMENT" />}>
-            <Route path="customers" element={<CustomerListPage />} />
             <Route path="inventory/products" element={<ProductListPage />} />
+          </Route>
+
+          {/* The backend gates customers, quotations, invoices and purchase orders on INVOICING. */}
+          <Route element={<RequireEntitlementRoute feature="INVOICING" />}>
+            <Route path="customers" element={<CustomerListPage />} />
+            <Route path="purchase-orders" element={<PurchaseOrderListPage />} />
+            <Route path="purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
             <Route path="quotations" element={<QuotationListPage />} />
             <Route path="quotations/new" element={<QuotationFormPage />} />
             <Route path="quotations/:id" element={<QuotationDetailPage />} />
@@ -107,6 +116,9 @@ export function AppRoutes() {
             <Route path="invoices" element={<InvoiceDashboardPage />} />
             <Route path="invoices/new" element={<InvoiceFormPage />} />
             <Route path="invoices/:id" element={<InvoiceDetailPage />} />
+            <Route element={<AdminRoute />}>
+              <Route path="settings/invoice-design" element={<InvoiceDesignPage />} />
+            </Route>
           </Route>
         </Route>
       </Route>

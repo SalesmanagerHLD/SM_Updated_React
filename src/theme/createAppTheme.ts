@@ -125,8 +125,19 @@ export function createAppTheme(settings: EffectiveThemeSettings): Theme {
       styleOverrides: {
         root: {
           textTransform: "none" as const,
-          fontWeight: 600,
+          fontWeight: 500,
         },
+      },
+    },
+    // Sidebar: same size/weight as body copy, medium-weight labels, tidy 20px icons.
+    MuiListItemText: {
+      styleOverrides: {
+        primary: { fontSize: "0.8125rem", fontWeight: 500 },
+      },
+    },
+    MuiListItemIcon: {
+      styleOverrides: {
+        root: { minWidth: 34, "& .MuiSvgIcon-root": { fontSize: 18 } },
       },
     },
     MuiPaper: {
@@ -152,14 +163,25 @@ export function createAppTheme(settings: EffectiveThemeSettings): Theme {
         },
       },
     },
+    // Header cells must be OPAQUE: action.hover alone is a translucent tint, so on a sticky
+    // header the scrolling rows showed through the header text. Paint the tint as a gradient
+    // layer over a solid paper background instead - same look, nothing bleeds through.
     MuiTableHead: {
       styleOverrides: {
         root: ({ theme }: { theme: Theme }) => ({
           "& .MuiTableCell-root": {
-            backgroundColor: theme.palette.action.hover,
+            backgroundColor: theme.palette.background.paper,
+            backgroundImage: `linear-gradient(${theme.palette.action.hover}, ${theme.palette.action.hover})`,
             fontWeight: 600,
           },
         }),
+      },
+    },
+    // Header cells stick to the top of their table's scroll box. List pages (see PageFill) make
+    // that box fill the screen, so the page itself stays put and only the rows scroll.
+    MuiTable: {
+      defaultProps: {
+        stickyHeader: true,
       },
     },
     MuiChip: {
@@ -205,6 +227,11 @@ export function createAppTheme(settings: EffectiveThemeSettings): Theme {
           boxShadow: "none",
           borderBottom: `1px solid ${theme.palette.divider}`,
         }),
+      },
+    },
+    MuiToolbar: {
+      styleOverrides: {
+        regular: { minHeight: 56 },
       },
     },
     // The permanent sidebar Drawer gets the same flat-bordered treatment, so it reads
@@ -259,18 +286,18 @@ export function createAppTheme(settings: EffectiveThemeSettings): Theme {
     typography: {
       fontFamily:
         '"Roboto", "Helvetica Neue", "Helvetica", "Arial", sans-serif',
-      h5: {
-        fontWeight: isMinimalist ? 500 : 600,
-      },
-      h6: {
-        fontWeight: isMinimalist ? 500 : 600,
-      },
-      subtitle1: {
-        fontWeight: isMinimalist ? 400 : 500,
-      },
-      subtitle2: {
-        fontWeight: isMinimalist ? 400 : 500,
-      },
+      // One compact, lighter scale for the whole app (shell, nav, pages, dashboard) so
+      // nothing reads bolder or larger than its neighbours.
+      fontSize: 12,
+      h4: { fontSize: "1.375rem", fontWeight: 600, lineHeight: 1.25 },
+      h5: { fontSize: "1.125rem", fontWeight: isMinimalist ? 500 : 600, lineHeight: 1.3 },
+      h6: { fontSize: "0.9375rem", fontWeight: isMinimalist ? 500 : 600, lineHeight: 1.4 },
+      subtitle1: { fontSize: "0.875rem", fontWeight: isMinimalist ? 400 : 500 },
+      subtitle2: { fontSize: "0.75rem", fontWeight: isMinimalist ? 400 : 500 },
+      body1: { fontSize: "0.8125rem" },
+      body2: { fontSize: "0.75rem" },
+      caption: { fontSize: "0.6875rem" },
+      button: { fontSize: "0.75rem", fontWeight: 500 },
     },
     components,
   });

@@ -9,7 +9,6 @@ import {
   Chip,
   CircularProgress,
   MenuItem,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -34,13 +33,14 @@ import {
 } from "../../api/leaveRequestsApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { LeaveRequestFormDialog } from "./LeaveRequestFormDialog";
 import { LeaveBalanceCards } from "./LeaveBalanceCards";
 import { LEAVE_REQUEST_STATUSES, LEAVE_STATUS_COLORS, LEAVE_STATUS_LABELS } from "./leaveStatusConfig";
-
-const PAGE_SIZE = 10;
 
 /**
  * Employee-facing home page for the Leave module: balance summary cards, a
@@ -52,6 +52,7 @@ export function MyLeaveRequestsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [statusFilter, setStatusFilter] = useState<LeaveRequestStatus | "">("");
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [pendingCancel, setPendingCancel] = useState<LeaveRequest | null>(null);
@@ -64,7 +65,7 @@ export function MyLeaveRequestsPage() {
   const { data: leaveTypes } = useLeaveTypes(true);
   const { data, isLoading, isError, error } = useMyLeaveRequests({
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
     status: statusFilter || undefined,
   });
   const cancelMutation = useCancelLeaveRequest();
@@ -127,7 +128,7 @@ export function MyLeaveRequestsPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack
         direction="row"
         sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
@@ -309,15 +310,27 @@ export function MyLeaveRequestsPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
 
@@ -337,6 +350,6 @@ export function MyLeaveRequestsPage() {
           onConfirm={handleConfirmCancel}
         />
       )}
-    </Box>
+    </PageFill>
   );
 }

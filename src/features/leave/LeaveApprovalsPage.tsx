@@ -11,7 +11,6 @@ import {
   CircularProgress,
   Link as MuiLink,
   MenuItem,
-  Pagination,
   Paper,
   Stack,
   Tab,
@@ -41,6 +40,9 @@ import {
 } from "../../api/leaveRequestsApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import {
   LEAVE_REQUEST_STATUSES,
@@ -48,8 +50,6 @@ import {
   LEAVE_STATUS_LABELS,
 } from "./leaveStatusConfig";
 import { LeaveDecisionDialog } from "./LeaveDecisionDialog";
-
-const PAGE_SIZE = 20;
 
 interface DecisionTarget {
   request: LeaveRequest;
@@ -299,6 +299,7 @@ function AllRequestsTab() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeaveRequestStatus | "">("");
   const [leaveTypeFilter, setLeaveTypeFilter] = useState("");
@@ -313,7 +314,7 @@ function AllRequestsTab() {
 
   const { data, isLoading, isError, error } = useAllLeaveRequests({
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
     employeeId: employeeFilter || undefined,
     status: statusFilter || undefined,
     leaveTypeId: leaveTypeFilter || undefined,
@@ -563,15 +564,27 @@ function AllRequestsTab() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
     </Box>
@@ -589,7 +602,7 @@ export function LeaveApprovalsPage() {
   const [tab, setTab] = useState(0);
 
   return (
-    <Box>
+    <PageFill>
       <Typography variant="h5" sx={{ mb: 2 }}>
         Leave Approvals
       </Typography>
@@ -603,6 +616,6 @@ export function LeaveApprovalsPage() {
 
       {tab === 0 && <PendingApprovalTab />}
       {tab === 1 && isAdmin && <AllRequestsTab />}
-    </Box>
+    </PageFill>
   );
 }

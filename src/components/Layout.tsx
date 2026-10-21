@@ -30,7 +30,6 @@ import TuneIcon from "@mui/icons-material/Tune";
 import PeopleIcon from "@mui/icons-material/People";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import GroupsIcon from "@mui/icons-material/Groups";
-import AssignmentIcon from "@mui/icons-material/Assignment";
 import HistoryIcon from "@mui/icons-material/History";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -46,6 +45,8 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ContactsIcon from "@mui/icons-material/Contacts";
 import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import dayjs from "dayjs";
 import { useAuth } from "../auth/AuthContext";
 import { useEntitlements } from "../entitlement/EntitlementContext";
@@ -72,10 +73,10 @@ function NavSectionHeader({ label }: { label: string }) {
     <ListSubheader
       disableSticky
       sx={{
-        lineHeight: "32px",
-        fontSize: "0.7rem",
-        fontWeight: 700,
-        letterSpacing: "0.05em",
+        lineHeight: "30px",
+        fontSize: "0.625rem",
+        fontWeight: 600,
+        letterSpacing: "0.06em",
         textTransform: "uppercase",
         bgcolor: "transparent",
       }}
@@ -97,6 +98,7 @@ export function Layout() {
   const hasLeaveManagement = hasEntitlement("EMPLOYEE_LEAVE_MANAGEMENT");
   const hasTeamVisibility = hasEntitlement("TEAM_VISIBILITY");
   const hasInventoryManagement = hasEntitlement("INVENTORY_MANAGEMENT");
+  const hasInvoicing = hasEntitlement("INVOICING");
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -290,10 +292,12 @@ export function Layout() {
         </>
       )}
 
-      {hasInventoryManagement && (
+      {(hasInventoryManagement || hasInvoicing) && (
         <>
           <NavSectionHeader label="Inventory" />
 
+          {hasInvoicing && (
+            <>
           <ListItemButton
             selected={location.pathname.startsWith("/app/customers")}
             onClick={() => handleNavigate("/app/customers")}
@@ -304,6 +308,11 @@ export function Layout() {
             <ListItemText primary="Customers" />
           </ListItemButton>
 
+            </>
+          )}
+
+          {hasInventoryManagement && (
+            <>
           <ListItemButton
             selected={location.pathname.startsWith("/app/inventory/products")}
             onClick={() => handleNavigate("/app/inventory/products")}
@@ -313,7 +322,11 @@ export function Layout() {
             </ListItemIcon>
             <ListItemText primary="Products" />
           </ListItemButton>
+            </>
+          )}
 
+          {hasInvoicing && (
+            <>
           <ListItemButton
             selected={location.pathname.startsWith("/app/quotations")}
             onClick={() => handleNavigate("/app/quotations")}
@@ -325,6 +338,16 @@ export function Layout() {
           </ListItemButton>
 
           <ListItemButton
+            selected={location.pathname.startsWith("/app/purchase-orders")}
+            onClick={() => handleNavigate("/app/purchase-orders")}
+          >
+            <ListItemIcon>
+              <AssignmentTurnedInIcon />
+            </ListItemIcon>
+            <ListItemText primary="Purchase orders" />
+          </ListItemButton>
+
+          <ListItemButton
             selected={location.pathname.startsWith("/app/invoices")}
             onClick={() => handleNavigate("/app/invoices")}
           >
@@ -333,6 +356,8 @@ export function Layout() {
             </ListItemIcon>
             <ListItemText primary="Invoices" />
           </ListItemButton>
+            </>
+          )}
         </>
       )}
 
@@ -434,16 +459,16 @@ export function Layout() {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography
-            variant="h6"
-            noWrap
-            component="div"
-            sx={{ flexGrow: 1, fontSize: { xs: "1.05rem", sm: "1.25rem" } }}
-          >
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {isMobile ? "SalesManager" : "SalesManager CRM"}
           </Typography>
           {email && (
-            <Typography variant="body2" noWrap sx={{ display: { xs: "none", sm: "block" } }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              noWrap
+              sx={{ display: { xs: "none", sm: "block" } }}
+            >
               {email}
             </Typography>
           )}
@@ -451,9 +476,9 @@ export function Layout() {
             <Chip
               label={role}
               size="small"
-              color="secondary"
+              color="primary"
               variant="outlined"
-              sx={{ color: "inherit", borderColor: "rgba(255,255,255,0.5)" }}
+              sx={{ fontWeight: 500, fontSize: "0.7rem" }}
             />
           )}
           <IconButton color="inherit" onClick={handleOpenNotifications}>
@@ -544,8 +569,10 @@ export function Layout() {
           ) : (
             <Button
               color="inherit"
-              startIcon={<LogoutIcon />}
+              size="small"
+              startIcon={<LogoutIcon fontSize="small" />}
               onClick={handleLogout}
+              sx={{ color: "text.secondary" }}
             >
               Logout
             </Button>
@@ -590,12 +617,19 @@ export function Layout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
           width: { xs: "100%", md: `calc(100% - ${DRAWER_WIDTH}px)` },
+          // The window never scrolls: main is exactly one screen tall. List pages fill the area
+          // below (PageFill) so only their table scrolls; every other page scrolls inside it.
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         <Toolbar />
-        <Outlet />
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 3 }}>
+          <Outlet />
+        </Box>
       </Box>
     </Box>
   );

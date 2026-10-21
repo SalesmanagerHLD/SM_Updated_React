@@ -157,3 +157,39 @@ export function useDeactivateEmployee() {
     onSuccess: () => invalidate(),
   });
 }
+
+export interface EmployeeImportRowError {
+  rowNumber: number;
+  email?: string;
+  message: string;
+}
+
+export interface EmployeeImportResultResponse {
+  totalRows: number;
+  importedCount: number;
+  errorCount: number;
+  errors: EmployeeImportRowError[];
+}
+
+/**
+ * Bulk-creates employees from an .xlsx/.csv file (see public/employee-import-template.*).
+ */
+export async function importEmployees(
+  file: File,
+): Promise<EmployeeImportResultResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await axiosInstance.post<EmployeeImportResultResponse>(
+    "/employees/import",
+    formData,
+  );
+  return response.data;
+}
+
+export function useImportEmployees() {
+  const invalidate = useInvalidateEmployees();
+  return useMutation({
+    mutationFn: (file: File) => importEmployees(file),
+    onSuccess: () => invalidate(),
+  });
+}

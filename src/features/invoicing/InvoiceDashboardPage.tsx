@@ -187,7 +187,7 @@ export function InvoiceDashboardPage() {
             )}
 
             {quotationsPage && (
-              <TableContainer sx={{ maxHeight: 520 }}>
+              <TableContainer>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>

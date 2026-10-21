@@ -14,10 +14,15 @@ export const MASTER_TYPE_LABELS: Record<MasterDataType, string> = {
   INTEREST_LEVEL: "Interest Level",
   LEAD_SOURCE: "Lead Source",
   STATE: "State",
+  INTEREST_REASON: "Interest Reason",
 };
+
+/** Tabs on the Masters screen. INTEREST_REASON is deliberately not a tab of its own: reasons are
+ * managed inline, under the interest level they belong to (see InterestReasonsPanel). */
+export const MASTER_TAB_TYPES: MasterDataType[] = MASTER_DATA_TYPES.filter((t) => t !== "INTEREST_REASON");
 
 export const DEFAULT_MASTER_DATA_TYPE: MasterDataType = "INDUSTRY";
 
 export function isMasterDataType(value: string | undefined): value is MasterDataType {
-  return !!value && (MASTER_DATA_TYPES as readonly string[]).includes(value);
+  return !!value && (MASTER_TAB_TYPES as readonly string[]).includes(value);
 }

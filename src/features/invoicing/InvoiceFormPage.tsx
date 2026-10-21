@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import dayjs, { Dayjs } from "dayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import {
@@ -8,6 +8,10 @@ import {
   Box,
   Button,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControlLabel,
   IconButton,
@@ -27,6 +31,12 @@ import type { CreateInvoicePayload, InvoiceLineItemPayload } from "../../api/inv
 import { useCreateInvoice } from "../../api/invoicesApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { BarcodeScanField } from "../../components/BarcodeScanField";
+import { useBillingProfile } from "../../api/billingProfileApi";
+import { useMasterData } from "../../api/masterDataApi";
+import { isInterState, roundToRupee, splitTax } from "../../utils/gst";
+import { useAuth } from "../../auth/AuthContext";
+import { getPurchaseOrderInvoiceDraft } from "../../api/purchaseOrdersApi";
+import type { PurchaseOrderInvoiceDraft } from "../../api/purchaseOrdersApi";
 
 type LineItemMode = "catalog" | "adhoc";
 
@@ -40,6 +50,11 @@ interface LineItemRow {
   unitPrice: string;
   discountPercent: string;
   taxRatePercent: string;
+  /** Set on a purchase-order invoice: the PO line this row bills (price/tax come from the PO). */
+  poLineId?: string;
+  /** Quantity still unbilled on that PO line when the form was opened. */
+  poRemaining?: number;
+  unit?: string;
 }
 
 function emptyRow(): LineItemRow {
@@ -56,15 +71,24 @@ function emptyRow(): LineItemRow {
   };
 }
 
-function computeLineTotals(row: LineItemRow) {
+function computeLineTotals(row: LineItemRow, interState: boolean) {
   const quantity = Number(row.quantity) || 0;
   const unitPrice = Number(row.unitPrice) || 0;
   const discountPercent = Number(row.discountPercent) || 0;
   const taxRatePercent = Number(row.taxRatePercent) || 0;
   const lineSubtotal = quantity * unitPrice;
   const lineDiscount = lineSubtotal * (discountPercent / 100);
-  const lineTax = (lineSubtotal - lineDiscount) * (taxRatePercent / 100);
-  return { lineSubtotal, lineDiscount, lineTax, lineTotal: lineSubtotal - lineDiscount + lineTax };
+  const lineTaxable = lineSubtotal - lineDiscount;
+  const { cgst, sgst, igst } = splitTax(lineTaxable, taxRatePercent, interState);
+  return {
+    lineSubtotal,
+    lineDiscount,
+    lineTaxable,
+    cgst,
+    sgst,
+    igst,
+    lineTotal: lineTaxable + cgst + sgst + igst,
+  };
 }
 
 /**
@@ -76,7 +100,19 @@ function computeLineTotals(row: LineItemRow) {
  */
 export function InvoiceFormPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const poId = searchParams.get("poId");
+  const { role } = useAuth();
+  const isAdmin = role === "ADMIN";
   const createMutation = useCreateInvoice();
+  const [poDraft, setPoDraft] = useState<PurchaseOrderInvoiceDraft | null>(null);
+  const [poLoading, setPoLoading] = useState(!!poId);
+  const [poLoadError, setPoLoadError] = useState<string | null>(null);
+  const [typedPoNumber, setTypedPoNumber] = useState("");
+  const [typedPoDate, setTypedPoDate] = useState<Dayjs | null>(null);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideLines, setOverrideLines] = useState<string[]>([]);
 
   const { data: leadsPage } = useLeads({ size: 200 });
   const { data: productsPage } = useProducts({ includeInactive: false, size: 200 });
@@ -96,7 +132,7 @@ export function InvoiceFormPage() {
   const [shipToGstin, setShipToGstin] = useState("");
   const [invoiceDate, setInvoiceDate] = useState<Dayjs | null>(dayjs());
   const [dueDate, setDueDate] = useState<Dayjs | null>(dayjs().add(15, "day"));
-  const [placeOfSupply, setPlaceOfSupply] = useState("");
+  const [placeOfSupplyStateId, setPlaceOfSupplyStateId] = useState<string | null>(null);
   const [reverseCharge, setReverseCharge] = useState(false);
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<LineItemRow[]>([emptyRow()]);
@@ -104,9 +140,62 @@ export function InvoiceFormPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
+  // "Create invoice from PO": the backend returns a pre-filled, unsaved body for the remaining quantities.
+  useEffect(() => {
+    if (!poId) return;
+    let cancelled = false;
+    setPoLoading(true);
+    getPurchaseOrderInvoiceDraft(poId)
+      .then((draft) => {
+        if (cancelled) return;
+        setPoDraft(draft);
+        setCustomerName(draft.customerName);
+        setCustomerAddress(draft.customerAddress ?? "");
+        setCustomerGstin(draft.customerGstin ?? "");
+        setInvoiceDate(dayjs(draft.invoiceDate));
+        setDueDate(draft.dueDate ? dayjs(draft.dueDate) : null);
+        setPlaceOfSupplyStateId(draft.placeOfSupplyStateId);
+        setNotes(draft.notes ?? "");
+        setLineItems(
+          draft.lineItems.map((l) => ({
+            key: crypto.randomUUID(),
+            mode: l.productId ? "catalog" : "adhoc",
+            productId: l.productId,
+            hsnSac: l.hsnSac ?? "",
+            description: l.description,
+            quantity: String(l.quantity),
+            unitPrice: String(l.unitPrice),
+            discountPercent: "0",
+            taxRatePercent: String(l.taxRatePercent),
+            poLineId: l.poLineId,
+            poRemaining: l.quantity,
+            unit: l.unit ?? undefined,
+          })),
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) setPoLoadError(parseApiError(err).message);
+      })
+      .finally(() => {
+        if (!cancelled) setPoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [poId]);
+
+  const { data: states } = useMasterData("STATE");
+  const { data: billingProfile } = useBillingProfile(true);
+  const interState = isInterState(billingProfile?.billingStateId, placeOfSupplyStateId);
+  const placeOfSupplyState = useMemo(
+    () => (states ?? []).find((s) => s.id === placeOfSupplyStateId) ?? null,
+    [states, placeOfSupplyStateId],
+  );
+
   const handleLeadChange = (lead: Lead | null) => {
     setSelectedLead(lead);
     if (lead) {
+      if (lead.stateId) setPlaceOfSupplyStateId(lead.stateId);
       setCustomerName(lead.companyName);
       setCustomerContactPerson(lead.contactPerson ?? "");
       setCustomerPhone(lead.contactNo ?? "");
@@ -193,17 +282,32 @@ export function InvoiceFormPage() {
   const totals = useMemo(() => {
     let subtotal = 0;
     let discountTotal = 0;
-    let taxTotal = 0;
+    let cgstTotal = 0;
+    let sgstTotal = 0;
+    let igstTotal = 0;
     for (const row of lineItems) {
-      const { lineSubtotal, lineDiscount, lineTax } = computeLineTotals(row);
-      subtotal += lineSubtotal;
-      discountTotal += lineDiscount;
-      taxTotal += lineTax;
+      const t = computeLineTotals(row, interState);
+      subtotal += t.lineSubtotal;
+      discountTotal += t.lineDiscount;
+      cgstTotal += t.cgst;
+      sgstTotal += t.sgst;
+      igstTotal += t.igst;
     }
-    return { subtotal, discountTotal, taxTotal, grandTotal: subtotal - discountTotal + taxTotal };
-  }, [lineItems]);
+    const taxableAmount = subtotal - discountTotal;
+    const { rounded, roundOff } = roundToRupee(taxableAmount + cgstTotal + sgstTotal + igstTotal);
+    return {
+      subtotal,
+      discountTotal,
+      taxableAmount,
+      cgstTotal,
+      sgstTotal,
+      igstTotal,
+      roundOff,
+      grandTotal: rounded,
+    };
+  }, [lineItems, interState]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (overBillingReason?: string) => {
     setFormError(null);
 
     if (!customerName.trim()) {
@@ -215,6 +319,13 @@ export function InvoiceFormPage() {
       return;
     }
     for (const row of lineItems) {
+      if (row.poLineId) {
+        if (!(Number(row.quantity) > 0)) {
+          setFormError("Every line's quantity must be greater than zero");
+          return;
+        }
+        continue;
+      }
       if (row.mode === "catalog" && !row.productId) {
         setFormError("Every catalog line must have a product selected");
         return;
@@ -230,6 +341,10 @@ export function InvoiceFormPage() {
     }
 
     const payloadLineItems: InvoiceLineItemPayload[] = lineItems.map((row) => {
+      if (row.poLineId) {
+        // Price, tax, HSN and description come from the PO line on the server.
+        return { poLineId: row.poLineId, quantity: Number(row.quantity) };
+      }
       const discountPercent = Number(row.discountPercent) || 0;
       if (row.mode === "catalog") {
         return { productId: row.productId as string, quantity: Number(row.quantity), discountPercent };
@@ -257,18 +372,46 @@ export function InvoiceFormPage() {
       shipToGstin: shipToSameAsBilling ? undefined : shipToGstin.trim() || undefined,
       invoiceDate: invoiceDate.format("YYYY-MM-DD"),
       dueDate: dueDate ? dueDate.format("YYYY-MM-DD") : undefined,
-      placeOfSupply: placeOfSupply.trim() || undefined,
+      placeOfSupply: placeOfSupplyState?.label,
+      placeOfSupplyStateId: placeOfSupplyStateId ?? undefined,
       reverseCharge,
       lineItems: payloadLineItems,
       notes: notes.trim() || undefined,
     };
+    if (poDraft) {
+      payload.poId = poDraft.poId;
+      payload.leadId = poDraft.leadId;
+      if (overBillingReason) payload.overBillingReason = overBillingReason;
+    } else if (typedPoNumber.trim()) {
+      payload.poNumber = typedPoNumber.trim();
+      payload.poDate = typedPoDate ? typedPoDate.format("YYYY-MM-DD") : undefined;
+    }
 
     try {
       const invoice = await createMutation.mutateAsync(payload);
       navigate(`/app/invoices/${invoice.id}`);
     } catch (error) {
-      setFormError(parseApiError(error).message);
+      const parsed = parseApiError(error);
+      if (parsed.code === "OVER_BILLING_OVERRIDE_REQUIRED" && isAdmin) {
+        // Only an admin gets here: ask for the mandatory reason, then resubmit with it.
+        setOverrideLines(parsed.fieldErrors.map((f) => f.message));
+        setOverrideOpen(true);
+        return;
+      }
+      setOverrideOpen(false);
+      setFormError(
+        parsed.code === "OVER_BILLING"
+          ? `${parsed.message} Reduce the quantities, or ask an admin to bill it.`
+          : parsed.message,
+      );
     }
+  };
+
+  const confirmOverride = async () => {
+    const reason = overrideReason.trim();
+    if (!reason) return;
+    setOverrideOpen(false);
+    await handleSubmit(reason);
   };
 
   return (
@@ -276,6 +419,23 @@ export function InvoiceFormPage() {
       <Typography variant="h5" sx={{ mb: 2 }}>
         New Invoice
       </Typography>
+
+      {poLoading && (
+        <Alert severity="info" sx={{ mb: 2 }}>Loading the purchase order...</Alert>
+      )}
+      {poLoadError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {poLoadError}{" "}
+          <Button size="small" onClick={() => navigate(`/app/purchase-orders/${poId}`)}>Back to the PO</Button>
+        </Alert>
+      )}
+      {poDraft && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Billing purchase order <strong>{poDraft.poNumber}</strong> ({dayjs(poDraft.poDate).format("DD MMM YYYY")}).
+          Quantities are pre-filled with what's left to bill; prices and tax come from the PO.
+          Remove a line to bill it later.
+        </Alert>
+      )}
 
       {formError && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setFormError(null)}>
@@ -292,6 +452,7 @@ export function InvoiceFormPage() {
             options={leadsPage?.content ?? []}
             getOptionLabel={(lead) => `${lead.companyName} (${lead.contactPerson})`}
             value={selectedLead}
+            disabled={!!poDraft}
             onChange={(_, lead) => handleLeadChange(lead)}
             renderInput={(params) => (
               <TextField
@@ -359,17 +520,48 @@ export function InvoiceFormPage() {
               onChange={setDueDate}
               slotProps={{ textField: { fullWidth: true } }}
             />
-            <TextField
-              label="Place of supply"
+            <Autocomplete
               fullWidth
-              value={placeOfSupply}
-              onChange={(e) => setPlaceOfSupply(e.target.value)}
+              options={states ?? []}
+              getOptionLabel={(s) => s.label}
+              value={placeOfSupplyState}
+              onChange={(_, s) => setPlaceOfSupplyStateId(s?.id ?? null)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Place of supply (state)"
+                  helperText={
+                    !billingProfile?.billingStateId
+                      ? "Set your business state in Settings to enable IGST."
+                      : interState
+                        ? "Inter-state sale - IGST will be charged."
+                        : "Same state - CGST + SGST will be charged."
+                  }
+                />
+              )}
             />
           </Stack>
           <FormControlLabel
             control={<Checkbox checked={reverseCharge} onChange={(e) => setReverseCharge(e.target.checked)} />}
             label="Reverse charge applicable"
           />
+          {!poDraft && (
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="Customer PO number (optional)"
+                fullWidth
+                value={typedPoNumber}
+                onChange={(e) => setTypedPoNumber(e.target.value)}
+                helperText="Printed on the invoice. To track quantities against a PO, create the invoice from the PO instead."
+              />
+              <DatePicker
+                label="Customer PO date"
+                value={typedPoDate}
+                onChange={setTypedPoDate}
+                slotProps={{ textField: { fullWidth: true } }}
+              />
+            </Stack>
+          )}
         </Stack>
       </Paper>
 
@@ -405,18 +597,22 @@ export function InvoiceFormPage() {
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
           <Typography variant="subtitle1">Line Items</Typography>
-          <Button size="small" startIcon={<AddIcon />} onClick={addRow}>
-            Add Line
-          </Button>
+          {!poDraft && (
+            <Button size="small" startIcon={<AddIcon />} onClick={addRow}>
+              Add Line
+            </Button>
+          )}
         </Stack>
 
-        <Box sx={{ mb: 2, maxWidth: 360 }}>
-          <BarcodeScanField
-            label="Scan barcode to add a product"
-            disabled={scanning}
-            onScan={handleScan}
-          />
-        </Box>
+        {!poDraft && (
+          <Box sx={{ mb: 2, maxWidth: 360 }}>
+            <BarcodeScanField
+              label="Scan barcode to add a product"
+              disabled={scanning}
+              onScan={handleScan}
+            />
+          </Box>
+        )}
         {scanError && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setScanError(null)}>
             {scanError}
@@ -425,10 +621,44 @@ export function InvoiceFormPage() {
 
         <Stack spacing={2}>
           {lineItems.map((row, index) => {
-            const { lineTotal } = computeLineTotals(row);
+            const { lineTotal } = computeLineTotals(row, interState);
             return (
               <Box key={row.key}>
                 {index > 0 && <Divider sx={{ mb: 2 }} />}
+                {row.poLineId ? (
+                  <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start" }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="body2">{row.description}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.hsnSac ? `HSN/SAC ${row.hsnSac} · ` : ""}Rate {Number(row.unitPrice).toFixed(2)} · Tax {row.taxRatePercent}%
+                      </Typography>
+                    </Box>
+                    <TextField
+                      label="Qty"
+                      size="small"
+                      type="number"
+                      sx={{ width: 140, flexShrink: 0 }}
+                      value={row.quantity}
+                      onChange={(e) => updateRow(row.key, { quantity: e.target.value })}
+                      error={Number(row.quantity) > (row.poRemaining ?? Infinity)}
+                      helperText={
+                        Number(row.quantity) > (row.poRemaining ?? Infinity)
+                          ? `More than the ${row.poRemaining} left on the PO`
+                          : `${row.poRemaining} left on the PO`
+                      }
+                    />
+                    <Typography variant="body2" sx={{ width: 100, flexShrink: 0, pt: 1, textAlign: "right" }}>
+                      {lineTotal.toFixed(2)}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => removeRow(row.key)}
+                      disabled={lineItems.length === 1}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                ) : (
                 <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start" }}>
                   <TextField
                     select
@@ -514,6 +744,7 @@ export function InvoiceFormPage() {
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </Stack>
+                )}
               </Box>
             );
           })}
@@ -523,7 +754,16 @@ export function InvoiceFormPage() {
         <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
           <Typography variant="body2">Subtotal: {totals.subtotal.toFixed(2)}</Typography>
           <Typography variant="body2">Discount: {totals.discountTotal.toFixed(2)}</Typography>
-          <Typography variant="body2">Tax: {totals.taxTotal.toFixed(2)}</Typography>
+          <Typography variant="body2">Taxable Amount: {totals.taxableAmount.toFixed(2)}</Typography>
+          {interState ? (
+            <Typography variant="body2">IGST: {totals.igstTotal.toFixed(2)}</Typography>
+          ) : (
+            <>
+              <Typography variant="body2">CGST: {totals.cgstTotal.toFixed(2)}</Typography>
+              <Typography variant="body2">SGST: {totals.sgstTotal.toFixed(2)}</Typography>
+            </>
+          )}
+          <Typography variant="body2">Round off: {totals.roundOff.toFixed(2)}</Typography>
           <Typography variant="subtitle1">Grand Total: {totals.grandTotal.toFixed(2)}</Typography>
         </Stack>
       </Paper>
@@ -543,10 +783,44 @@ export function InvoiceFormPage() {
         <Button onClick={() => navigate("/app/invoices")} disabled={createMutation.isPending}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={createMutation.isPending}>
+        <Button variant="contained" onClick={() => handleSubmit()} disabled={createMutation.isPending || poLoading || (!!poId && !poDraft)}>
           {createMutation.isPending ? "Creating..." : "Create Invoice"}
         </Button>
       </Stack>
+
+      <Dialog open={overrideOpen} onClose={() => setOverrideOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Bill more than the PO quantity?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This invoice goes past what is left on the purchase order:
+            <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+              {overrideLines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </Alert>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            As an admin you can override this. The reason is stored on the invoice and recorded on the lead's timeline.
+          </Typography>
+          <TextField
+            label="Override reason"
+            required
+            fullWidth
+            multiline
+            minRows={2}
+            autoFocus
+            value={overrideReason}
+            onChange={(e) => setOverrideReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOverrideOpen(false)}>Go back</Button>
+          <Button variant="contained" color="warning" onClick={confirmOverride}
+            disabled={!overrideReason.trim() || createMutation.isPending}>
+            Override and create invoice
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

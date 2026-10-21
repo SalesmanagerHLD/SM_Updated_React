@@ -10,7 +10,6 @@ import {
   Chip,
   CircularProgress,
   MenuItem,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -29,9 +28,10 @@ import type { Quotation, QuotationStatus } from "../../api/quotationsApi";
 import { getQuotations, useQuotations } from "../../api/quotationsApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
-
-const PAGE_SIZE = 20;
 
 const STATUS_COLORS: Record<QuotationStatus, "default" | "info" | "success" | "error" | "secondary"> = {
   DRAFT: "default",
@@ -47,6 +47,7 @@ export function QuotationListPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const [statusFilter, setStatusFilter] = useState<QuotationStatus | "">("");
   const [search, setSearch] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
@@ -56,7 +57,7 @@ export function QuotationListPage() {
     status: statusFilter || undefined,
     search: search || undefined,
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
   });
 
   const rows = useMemo(() => data?.content ?? [], [data]);
@@ -81,7 +82,7 @@ export function QuotationListPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h5">Quotations</Typography>
         <Button startIcon={<AddIcon />} variant="contained" onClick={() => navigate("/app/quotations/new")}>
@@ -206,13 +207,29 @@ export function QuotationListPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination count={data.totalPages} page={page + 1} onChange={(_, next) => setPage(next - 1)} />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
-    </Box>
+    </PageFill>
   );
 }

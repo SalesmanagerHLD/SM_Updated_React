@@ -44,6 +44,7 @@ import {
 import { useMasterData } from "../../api/masterDataApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { CreatableMasterAutocomplete } from "../../components/CreatableMasterAutocomplete";
+import { InterestReasonsField } from "../../components/InterestReasonsField";
 
 const VISIT_TYPE_LABELS: Record<VisitType, string> = {
   FIELD: "Field Visit",
@@ -71,6 +72,7 @@ const schema = z.object({
   budgetRange: z.string(),
   interestLevelId: z.string().nullable(),
   interestLevelOther: z.string().nullable(),
+  interestReasonIds: z.array(z.string()),
   productIds: z.array(z.string()),
   remarks: z.string(),
   decisionMakerIdentified: z.boolean(),
@@ -98,6 +100,7 @@ const blankValues: FormValues = {
   budgetRange: "",
   interestLevelId: null,
   interestLevelOther: null,
+  interestReasonIds: [],
   productIds: [],
   remarks: "",
   decisionMakerIdentified: false,
@@ -196,6 +199,7 @@ export function VisitFormDialog({
         budgetRange: visit.budgetRange ?? "",
         interestLevelId: visit.interestLevelId,
         interestLevelOther: visit.interestLevelOther,
+        interestReasonIds: visit.interestReasonIds ?? [],
         productIds: visit.productIds ?? [],
         remarks: visit.remarks ?? "",
         decisionMakerIdentified: visit.decisionMakerIdentified ?? false,
@@ -218,6 +222,7 @@ export function VisitFormDialog({
         budgetRange: lead.budgetRange ?? "",
         interestLevelId: lead.interestLevelId,
         interestLevelOther: lead.interestLevelId ? null : lead.interestLevelOther,
+        interestReasonIds: lead.interestReasonIds ?? [],
       });
       void runSameDayCheck(dayjs());
     }
@@ -262,6 +267,7 @@ export function VisitFormDialog({
       budgetRange: values.budgetRange.trim() || undefined,
       interestLevelId: values.interestLevelId ?? undefined,
       interestLevelOther: values.interestLevelOther ?? undefined,
+      interestReasonIds: values.interestReasonIds,
       productIds: values.productIds,
       remarks: values.remarks.trim() || undefined,
       decisionMakerIdentified: values.decisionMakerIdentified,
@@ -537,6 +543,19 @@ export function VisitFormDialog({
                         field.onChange(id);
                         form.setValue("interestLevelOther", other);
                       }}
+                    />
+                  )}
+                />
+              </Grid>
+              <Grid size={12}>
+                <Controller
+                  control={form.control}
+                  name="interestReasonIds"
+                  render={({ field }) => (
+                    <InterestReasonsField
+                      interestLevelId={form.watch("interestLevelId")}
+                      value={field.value ?? []}
+                      onChange={field.onChange}
                     />
                   )}
                 />

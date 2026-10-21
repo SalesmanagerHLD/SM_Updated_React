@@ -9,7 +9,6 @@ import {
   Chip,
   CircularProgress,
   IconButton,
-  Pagination,
   Paper,
   Stack,
   Table,
@@ -26,24 +25,28 @@ import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import BlockIcon from "@mui/icons-material/Block";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { Employee } from "../../api/employeesApi";
 import { getEmployees, useDeactivateEmployee, useEmployees } from "../../api/employeesApi";
 import { useMasterData } from "../../api/masterDataApi";
 import { parseApiError } from "../../api/errorHelpers";
 import { exportToCsv } from "../../utils/exportToCsv";
+import { PageFill } from "../../components/PageFill";
+import { TablePager } from "../../components/TablePager";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { TableToolbar } from "../../components/TableToolbar";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { EmployeeFormDialog } from "./EmployeeFormDialog";
-
-const PAGE_SIZE = 20;
+import { EmployeeImportDialog } from "./EmployeeImportDialog";
 
 export function EmployeeListPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
   const { data, isLoading, isError, error } = useEmployees({
     page,
-    size: PAGE_SIZE,
+    size: pageSize,
   });
   const deactivateMutation = useDeactivateEmployee();
 
@@ -64,6 +67,7 @@ export function EmployeeListPage() {
   }, [designations]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [pendingDeactivate, setPendingDeactivate] = useState<Employee | null>(
     null,
@@ -133,19 +137,28 @@ export function EmployeeListPage() {
   };
 
   return (
-    <Box>
+    <PageFill>
       <Stack
         direction="row"
         sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
       >
         <Typography variant="h5">Employees</Typography>
-        <Button
-          startIcon={<AddIcon />}
-          variant="contained"
-          onClick={openCreateDialog}
-        >
-          Add Employee
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            startIcon={<UploadFileIcon />}
+            variant="outlined"
+            onClick={() => setImportOpen(true)}
+          >
+            Import
+          </Button>
+          <Button
+            startIcon={<AddIcon />}
+            variant="contained"
+            onClick={openCreateDialog}
+          >
+            Add Employee
+          </Button>
+        </Stack>
       </Stack>
 
       {rowError && (
@@ -333,15 +346,27 @@ export function EmployeeListPage() {
             </TableContainer>
           )}
 
-          {data.totalPages > 1 && (
-            <Stack direction="row" sx={{ justifyContent: "center", mt: 2 }}>
-              <Pagination
-                count={data.totalPages}
-                page={page + 1}
-                onChange={(_, next) => setPage(next - 1)}
-              />
-            </Stack>
-          )}
+          <TablePager
+
+            page={page}
+
+            totalPages={data.totalPages}
+
+            totalElements={data.totalElements}
+
+            pageSize={pageSize}
+
+            onPageChange={setPage}
+
+            onPageSizeChange={(n) => {
+
+              setPageSize(n);
+
+              setPage(0);
+
+            }}
+
+          />
         </>
       )}
 
@@ -350,6 +375,8 @@ export function EmployeeListPage() {
         onClose={() => setDialogOpen(false)}
         employee={editingEmployee}
       />
+
+      <EmployeeImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
 
       {pendingDeactivate && (
         <ConfirmDialog
@@ -362,6 +389,6 @@ export function EmployeeListPage() {
           onConfirm={handleConfirmDeactivate}
         />
       )}
-    </Box>
+    </PageFill>
   );
 }
